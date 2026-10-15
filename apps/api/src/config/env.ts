@@ -1,4 +1,9 @@
+import { PASSWORD_MIN_LENGTH } from '@kanbit/shared';
 import { z } from 'zod';
+
+/** `KEY=` in a .env file arrives as '' and means "unset". */
+const optionalNonEmpty = <T extends z.ZodType>(schema: T) =>
+  z.preprocess((value) => (value === '' ? undefined : value), schema.optional());
 
 const EnvSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -12,8 +17,10 @@ const EnvSchema = z.object({
     .optional()
     .transform((value) => (value ? value : undefined)),
   CORS_ORIGIN: z.url(),
-  SEED_TEACHER_USERNAME: z.string().min(1).optional(),
-  SEED_TEACHER_PASSWORD: z.string().min(8).optional(),
+  // Optional initial teacher, created at boot when missing (never overwritten).
+  SEED_TEACHER_USERNAME: optionalNonEmpty(z.string().trim().min(1)),
+  SEED_TEACHER_PASSWORD: optionalNonEmpty(z.string().min(PASSWORD_MIN_LENGTH)),
+  SEED_TEACHER_NAME: optionalNonEmpty(z.string().trim().min(1)),
 });
 
 export type Env = z.infer<typeof EnvSchema>;

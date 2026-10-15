@@ -1,18 +1,12 @@
 import request from 'supertest';
 import { describe, expect, it } from 'vitest';
-import { createApp, type AppDeps } from '../src/app';
-import { createClock } from '../src/lib/clock';
+import type { AppDeps } from '../src/app';
+import { buildTestApp } from './support/app';
 
 const fixedNow = new Date('2026-10-19T15:00:00Z');
 
 function buildApp(pingDb: AppDeps['pingDb']) {
-  return createApp({
-    pingDb,
-    clock: createClock(() => fixedNow),
-    corsOrigin: 'http://localhost:5173',
-    version: '9.9.9-test',
-    logLevel: 'silent',
-  });
+  return buildTestApp({ pingDb, now: fixedNow }).app;
 }
 
 describe('GET /api/v1/health', () => {
