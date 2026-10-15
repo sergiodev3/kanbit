@@ -19,7 +19,7 @@ The installed PWA on a phone shows the production health.
 - [x] T1 Workspace scaffold: root config, shared package, CLAUDE.md, README — route: delegated (2+ non-trivial files) — commits e5b3474, (gitignore .atl) follow-up
 - [x] T2 API: express skeleton, env, clock, error handler, health route, Prisma schema + first migration, tests — route: delegated — commit d8456c6
 - [x] T3 Web: Vite + React + Tailwind + PWA (manifest, icons, install, update prompt), health page — route: delegated — commit 01afb45
-- [ ] T4 Deploy: Railway (Postgres + API + domain) and Vercel (web + domain) — route: user-run dashboards, values provided
+- [x] T4 Deploy: Railway (Postgres + API + domain) and Vercel (web + domain) — route: user-run dashboards, values provided — fix PR #2 (root `start`, `engines.pnpm`)
 
 ## Checks
 - `pnpm -r build`, `pnpm -r test`, `pnpm -r typecheck` green.
@@ -36,5 +36,17 @@ The installed PWA on a phone shows the production health.
   Advisory follow-ups (non-blocking): graceful shutdown should close idle keep-alive connections (apps/api/src/index.ts:41-43);
   tests for health ping timeout, env validation, and apiFetch non-envelope/invalid-schema errors.
 
+- T4 deploy evidence (Oct 15, 2026):
+  - Railway: Railpack uses pnpm 12.11.2 via `engines.pnpm`; `prisma migrate deploy` applied the init migration; healthcheck passed.
+  - `GET https://api.kanbit.app/api/v1/health` → 200 `{"status":"ok","db":"ok"}` (needed CNAME `api` + TXT `_railway-verify.api`).
+  - Vercel: root `apps/web`, `ENABLE_EXPERIMENTAL_COREPACK=1` (else Vercel ignores `packageManager`), `VITE_API_URL` baked into bundle.
+  - `https://kanbit.app` → 200; `https://www.kanbit.app/*` → 308 to apex (apex must be primary: CORS allows only `https://kanbit.app`).
+  - `manifest.webmanifest` and `sw.js` served with `Cache-Control: no-cache`.
+  - User test on iPhone (installed to home screen): online shows "En línea"; airplane mode opens app with offline banner.
+- Pending manual checks: Android Chrome install; Lighthouse PWA audit.
+
+## Status
+Phase 0 done-criteria met: the installed PWA on a phone shows production health.
+
 ## Next step
-Review consent decision → T4 deploy (Railway Postgres + API + `api.kanbit.app`, Vercel `kanbit.app`).
+Phase 1 (Thu Oct 15): auth + teacher seed + teacher panel for groups, teams, moderator, projects — propose file plan first (spec §14).
