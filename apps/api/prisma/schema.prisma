@@ -1,0 +1,284 @@
+// Kanbit v1.0 data model (spec §6 + §12.1 "Modelo de datos mínimo").
+// GroupSchedule, Blocker, Note and Comment arrive with later migrations.
+
+generator client {
+  provider        = "prisma-client"
+  output          = "../src/generated/prisma"
+  previewFeatures = ["partialIndexes"]
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  TEACHER
+  STUDENT
+}
+
+enum Weekday {
+  MON
+  TUE
+  WED
+  THU
+  FRI
+}
+
+enum CardStatus {
+  BACKLOG
+  TODO
+  DOING
+  DONE
+}
+
+enum SprintStatus {
+  OPEN
+  CLOSED
+}
+
+/// KICKOFF = Arranque, FOLLOWUP = Seguimiento, CLOSING = Cierre
+enum MeetingType {
+  KICKOFF
+  FOLLOWUP
+  CLOSING
+}
+
+model User {
+  id           String   @id @default(cuid(2))
+  name         String
+  /// Student id (matricula) or generated username
+  username     String   @unique
+  passwordHash String
+  role         Role
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  groupsTaught        Group[]
+  groupMemberships    GroupMember[]
+  teamMemberships     TeamMember[]
+  assignedCards       Card[]           @relation("CardAssignee")
+  validatedCards      Card[]           @relation("CardValidator")
+  createdCards        Card[]           @relation("CardCreator")
+  cardEvents          CardEvent[]
+  facilitatedMeetings Meeting[]
+  checkins            MeetingCheckin[] @relation("CheckinUser")
+  capturedCheckins    MeetingCheckin[] @relation("CheckinCapturer")
+}
+
+model Group {
+  id          String   @id @default(cuid(2))
+  /// e.g. "5A Programacion"
+  name        String
+  /// Code students use to register into the group
+  accessCode  String   @unique
+  accessOpen  Boolean  @default(true)
+  teacherId   String
+  minTeamSize Int      @default(3)
+  maxTeamSize Int      @default(9)
+  timezone    String   @default("America/Monterrey")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  teacher User          @relation(fields: [teacherId], references: [id], onDelete: Restrict)
+  members GroupMember[]
+  teams   Team[]
+
+  @@index([teacherId])
+}
+
+model GroupMember {
+  groupId   String
+  userId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  group           Group        @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user            User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  teamMemberships TeamMember[]
+
+  @@id([groupId, userId])
+  @@index([userId])
+}
+
+model Team {
+  id        String   @id @default(cuid(2))
+  name      String
+  groupId   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  group    Group        @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  members  TeamMember[]
+  projects Project[]
+  sprints  Sprint[]
+  cards    Card[]
+
+  /// Target of TeamMember's composite FK so a member's groupId always matches the team's group.
+  @@unique([id, groupId])
+  @@index([groupId])
+}
+
+model TeamMember {
+  teamId      String
+  userId      String
+  /// Denormalized from Team so (groupId, userId) can be unique: one team per student per group.
+  groupId     String
+  isModerator Boolean  @default(false)
+  /// Row order on the board
+  rowOrder    Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  team        Team        @relation(fields: [teamId, groupId], references: [id, groupId], onDelete: Cascade)
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  groupMember GroupMember @relation(fields: [groupId, userId], references: [groupId, userId], onDelete: Cascade)
+
+  @@id([teamId, userId])
+  @@unique([groupId, userId])
+  @@index([userId])
+}
+
+model Project {
+  id        String   @id @default(cuid(2))
+  teamId    String
+  name      String
+  archived  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  team  Team   @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  cards Card[]
+
+  @@index([teamId])
+}
+
+model Sprint {
+  id        String       @id @default(cuid(2))
+  teamId    String
+  /// 1, 2, 3...
+  number    Int
+  /// Monday (calendar date, no time)
+  startDate DateTime     @db.Date
+  /// Friday (calendar date, no time)
+  endDate   DateTime     @db.Date
+  goal      String?
+  status    SprintStatus @default(OPEN)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+
+  team     Team      @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  cards    Card[]
+  meetings Meeting[]
+
+  @@unique([teamId, number])
+  /// Only one OPEN sprint per team (spec §6.1).
+  @@unique([teamId], where: raw("status = 'OPEN'"), map: "Sprint_teamId_open_key")
+}
+
+model Card {
+  id               String     @id @default(cuid(2))
+  teamId           String
+  projectId        String
+  /// null = backlog
+  sprintId         String?
+  /// null = unassigned (only allowed in BACKLOG)
+  assigneeId       String?
+  title            String     @db.VarChar(140)
+  /// Required outside BACKLOG
+  doneCriteria     String?    @db.VarChar(200)
+  /// Required outside BACKLOG
+  dueWeekday       Weekday?
+  status           CardStatus @default(BACKLOG)
+  /// Fractional index within (assignee, status). Compare bytewise (COLLATE "C"), never by locale.
+  position         String
+  validated        Boolean    @default(false)
+  validatedById    String?
+  /// Times the card was carried over to another sprint
+  carriedOverCount Int        @default(0)
+  completedAt      DateTime?
+  createdById      String
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  team        Team        @relation(fields: [teamId], references: [id], onDelete: Cascade)
+  project     Project     @relation(fields: [projectId], references: [id], onDelete: Restrict)
+  sprint      Sprint?     @relation(fields: [sprintId], references: [id], onDelete: SetNull)
+  assignee    User?       @relation("CardAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  validatedBy User?       @relation("CardValidator", fields: [validatedById], references: [id], onDelete: SetNull)
+  createdBy   User        @relation("CardCreator", fields: [createdById], references: [id], onDelete: Restrict)
+  events      CardEvent[]
+
+  @@index([teamId, assigneeId, status])
+  @@index([projectId])
+  @@index([sprintId])
+  @@index([assigneeId])
+  @@index([validatedById])
+  @@index([createdById])
+}
+
+/// Append-only history for metrics and audit (no updatedAt by design).
+model CardEvent {
+  id         String      @id @default(cuid(2))
+  cardId     String
+  userId     String
+  /// MOVED, ASSIGNED, VALIDATED, CARRIED_OVER, EDITED...
+  type       String      @db.VarChar(32)
+  fromStatus CardStatus?
+  toStatus   CardStatus?
+  createdAt  DateTime    @default(now())
+
+  card Card @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([cardId, createdAt])
+  @@index([userId])
+}
+
+model Meeting {
+  id              String      @id @default(cuid(2))
+  sprintId        String
+  type            MeetingType
+  /// Meeting day (calendar date, no time)
+  date            DateTime    @db.Date
+  startedAt       DateTime?
+  endedAt         DateTime?
+  durationSeconds Int?
+  notesMd         String?
+  agreements      String?
+  facilitatorId   String?
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  sprint      Sprint           @relation(fields: [sprintId], references: [id], onDelete: Cascade)
+  facilitator User?            @relation(fields: [facilitatorId], references: [id], onDelete: SetNull)
+  checkins    MeetingCheckin[]
+
+  /// One meeting per day per team (each sprint belongs to one team).
+  @@unique([sprintId, date])
+  @@index([facilitatorId])
+}
+
+model MeetingCheckin {
+  id            String   @id @default(cuid(2))
+  meetingId     String
+  userId        String
+  /// Set when a moderator captures the check-in for a teammate (plan B, spec §5.3)
+  capturedById  String?
+  turnOrder     Int?
+  secondsSpoken Int?
+  did           String?
+  doing         String?
+  willDo        String?
+  blockers      String?
+  present       Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  meeting    Meeting @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  user       User    @relation("CheckinUser", fields: [userId], references: [id], onDelete: Cascade)
+  capturedBy User?   @relation("CheckinCapturer", fields: [capturedById], references: [id], onDelete: SetNull)
+
+  @@unique([meetingId, userId])
+  @@index([userId])
+  @@index([capturedById])
+}

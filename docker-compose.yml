@@ -1,0 +1,20 @@
+services:
+  postgres:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: kanbit
+      POSTGRES_PASSWORD: kanbit
+      POSTGRES_DB: kanbit
+    ports:
+      - '5433:5432'
+    volumes:
+      - kanbit-pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U kanbit -d kanbit']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  kanbit-pg:

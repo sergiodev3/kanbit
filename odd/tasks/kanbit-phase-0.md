@@ -16,9 +16,9 @@ The installed PWA on a phone shows the production health.
 - Commits: Conventional Commits, no AI attribution (user rule).
 
 ## Tasks
-- [ ] T1 Workspace scaffold: root config, shared package, CLAUDE.md, README — route: delegated (2+ non-trivial files)
-- [ ] T2 API: express skeleton, env, clock, error handler, health route, Prisma schema + first migration, tests — route: delegated
-- [ ] T3 Web: Vite + React + Tailwind + PWA (manifest, icons, install, update prompt), health page — route: delegated
+- [x] T1 Workspace scaffold: root config, shared package, CLAUDE.md, README — route: delegated (2+ non-trivial files) — commits e5b3474, (gitignore .atl) follow-up
+- [x] T2 API: express skeleton, env, clock, error handler, health route, Prisma schema + first migration, tests — route: delegated — commit d8456c6
+- [x] T3 Web: Vite + React + Tailwind + PWA (manifest, icons, install, update prompt), health page — route: delegated — commit 01afb45
 - [ ] T4 Deploy: Railway (Postgres + API + domain) and Vercel (web + domain) — route: user-run dashboards, values provided
 
 ## Checks
@@ -27,7 +27,14 @@ The installed PWA on a phone shows the production health.
 - Lighthouse: PWA installable.
 
 ## Progress / evidence
-(none yet)
+- Writer: `pnpm install`, `pnpm -r typecheck`, `pnpm -r test` (18 pass), `pnpm -r build`, `prisma validate` all green, no DB.
+- Parent spot check: `pnpm -r test` green (api 13, web 3, shared 2).
+- Deviations accepted: Node 22 (`>=22.12`, Vitest 5 requires it); pnpm 12 minimumReleaseAge → tsup 8.5.1, react 19.3.0;
+  partial unique index via Prisma `partialIndexes` preview; TeamMember composite FKs.
+- Follow-ups: bump react to ~19.3.1 once mature; `Card.position` must sort with `COLLATE "C"`; migration never applied to a real DB yet.
+- RDD: assessed medium (`slice_budget_reached`); user granted; reliability lens approved, acknowledged (authority burned).
+  Advisory follow-ups (non-blocking): graceful shutdown should close idle keep-alive connections (apps/api/src/index.ts:41-43);
+  tests for health ping timeout, env validation, and apiFetch non-envelope/invalid-schema errors.
 
 ## Next step
-T1–T3 via one delegated writer.
+Review consent decision → T4 deploy (Railway Postgres + API + `api.kanbit.app`, Vercel `kanbit.app`).

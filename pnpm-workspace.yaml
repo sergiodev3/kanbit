@@ -1,0 +1,9 @@
+packages:
+  - apps/*
+  - packages/*
+
+# pnpm blocks dependency lifecycle scripts unless they are explicitly allowed.
+allowBuilds:
+  esbuild: true
+  prisma: true
+  '@prisma/engines': true
