@@ -62,3 +62,24 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
   // Callers validate the shape with zod where it matters.
   return body as T;
 }
+
+const withJsonBody = (method: string, body: unknown): RequestInit =>
+  body === undefined ? { method } : { method, body: JSON.stringify(body) };
+
+export const apiGet = <T>(path: string): Promise<T> => apiFetch<T>(path);
+
+/** 204 responses resolve to `undefined`. */
+export const apiPost = <T = undefined>(path: string, body?: unknown): Promise<T> =>
+  apiFetch<T>(path, withJsonBody('POST', body));
+
+export const apiPatch = <T = undefined>(path: string, body?: unknown): Promise<T> =>
+  apiFetch<T>(path, withJsonBody('PATCH', body));
+
+export const apiPut = <T = undefined>(path: string, body?: unknown): Promise<T> =>
+  apiFetch<T>(path, withJsonBody('PUT', body));
+
+export const apiDelete = <T = undefined>(path: string): Promise<T> => apiFetch<T>(path, { method: 'DELETE' });
+
+/** True when `error` is an `ApiError`, optionally with the given code. */
+export const isApiError = (error: unknown, code?: string): error is ApiError =>
+  error instanceof ApiError && (code === undefined || error.code === code);

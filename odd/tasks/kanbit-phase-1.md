@@ -50,7 +50,9 @@ The teacher creates a group; two students register with the code and end up in a
   (one mechanical file + tests) — RED 2 failing → GREEN api 53 tests
 - [x] T2 API groups/teams/projects + `http/authz.ts`, access code, `planMembers` rules, tests (~700 forecast, ~2250
   actual: mostly tests and the in-memory store) — route: delegated — api 109 tests, shared 21 (writer + parent spot check)
-- [ ] T3 Web auth + routing: api helpers, session, role guard, login/register/profile, layout, tests (~500) — route: delegated
+- [x] T3 Web auth + routing: api helpers, session, role guard, login/register/profile, layout, tests (~500 forecast,
+  ~1355 actual, half tests) — route: delegated — web 35 tests (writer + parent spot check); branch
+  `feat/phase-1-web-auth` stacked on the T2 branch
 - [ ] T4 Web teacher panel, my-team placeholder, projects panel, README, deploy + production smoke test (~650) — route: delegated
 
 ## Checks
@@ -110,5 +112,17 @@ The teacher creates a group; two students register with the code and end up in a
   concurrent `PUT members` on the same team can surface a 500 (P2025) instead of 409; Prisma repositories unproved
   against Postgres (no unique on `rowOrder`/moderator in the schema, so one-by-one updates are safe).
 
+- T3: 7 slices RED→GREEN; typecheck/build ok; `sw.js` precaches 16 app-shell entries with `/index.html` navigation
+  fallback (`/api/` denied), no API caching. Deviations accepted: redirect after login/register driven by the `['me']`
+  cache (only same-app `from`); `useMe` maps 401 to `null`; any 401 sets `['me']` to null; queries never retry 4xx;
+  login/register/logout clear all cached data except `['me']`; logged-in users on `/login`/`/register` go home; unknown
+  paths redirect to `/`; router test mocks `UpdatePrompt` (Vite can't resolve the PWA virtual module in tests).
+- T3 notes for T4: routes `/login`, `/register?code=`, `/profile`, `/status`; role areas `<RequireAuth role>` →
+  `teacher`, `team` (placeholders to replace). Hooks in `features/auth/auth.api.ts` (`useMe`, `ME_QUERY_KEY`,
+  `homePathFor`). `lib/api.ts` `apiGet/Post/Patch/Put/Delete`, `isApiError`. `lib/error-messages.ts` covers T1+T2
+  codes. `shared/forms/` (`TextField`, `ErrorSummary`, `SubmitButton`, `fieldErrorsFrom`). Test utils `test/utils.tsx`.
+- PR 2 review: an extra full-T2 review requested by the stop hook was granted by the user but refused by the provider
+  before start (`invalid_request`, untracked T3 files in the tree; nothing mutated).
+
 ## Next step
-Review T2, open PR 2 against `main`, then T3.
+Commit T3, review it, open PR 3 after PR 2 merges, then T4.
