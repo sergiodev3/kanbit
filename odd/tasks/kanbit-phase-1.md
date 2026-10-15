@@ -105,7 +105,10 @@ The teacher creates a group; two students register with the code and end up in a
   Project `{id,teamId,name,updatedAt}`. Errors: `FORBIDDEN` 403; `GROUP_/TEAM_/PROJECT_NOT_FOUND` 404;
   `INVALID_MEMBERS` 400 (details.userIds); `NOT_A_TEAM_MEMBER` 400; `TEAM_HAS_CARDS` 409; `MEMBERS_CONFLICT` 409.
   Name limits: group 80, team 60, project 80. `PUT members` max 50 distinct ids.
-- Slices: PR 2 = T2.
+- Slices: PR 2 = T2 (025bb99).
+- T2 RDD: assessed high; user granted; 4-lens review approved, acknowledged (burned). Advisories (follow-ups):
+  concurrent `PUT members` on the same team can surface a 500 (P2025) instead of 409; Prisma repositories unproved
+  against Postgres (no unique on `rowOrder`/moderator in the schema, so one-by-one updates are safe).
 
 ## Next step
 Review T2, open PR 2 against `main`, then T3.
