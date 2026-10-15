@@ -4,11 +4,14 @@
   "type": "module",
   "packageManager": "pnpm@12.11.2",
   "engines": {
-    "node": ">=22.12.0"
+    "node": ">=22.12.0",
+    "pnpm": "12.11.2"
   },
   "scripts": {
     "dev": "pnpm --parallel --filter @kanbit/api --filter @kanbit/web dev",
     "build": "pnpm -r build",
+    "build:api": "pnpm --filter @kanbit/api build",
+    "start": "pnpm --filter @kanbit/api start",
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck"
   }
