@@ -28,7 +28,7 @@ The teacher creates a group; two students register with the code and end up in a
 - Teacher seed: idempotent `ensureSeedTeacher` at boot when `SEED_TEACHER_*` is set, plus `pnpm db:seed` locally.
 - Tests run without a DB: pure rule tests + supertest with fake services injected via `AppDeps`.
 - English URL paths; share link `/register?code=XXXXXX`. UI copy es-MX.
-- Rate limit login/register: 10 per 15 min.
+- Rate limit login/register, per route per 15 min: 10 failures per IP + username; 50 guesses (401/403/404) per IP.
 
 ## Endpoints (`/api/v1`, spec §10)
 - Auth: `POST /auth/register`, `POST /auth/login`, `POST /auth/logout`, `GET /auth/me`, `POST /auth/change-password`.
@@ -83,5 +83,12 @@ The teacher creates a group; two students register with the code and end up in a
   against a real DB, seed race untested.
 - Not yet run against a real DB: Prisma repositories, `pnpm db:seed`.
 
+- T1c RDD: assessed high; user granted; approved, acknowledged (burned). Second branch review (main..d5b25c6, stop hook,
+  user granted): approved, acknowledged (burned).
+- Open advisories (follow-ups, not fixed): sessions not revoked on password change/reset (accepted v1.0); register 409
+  reveals usernames to holders of an open group code; IP+username limiter counts 5xx; boot seed is not retried (if it
+  fails on deploy, restart the service once the DB is up); login username max 64 is a bare literal; seed password has
+  no 128 max; duplicated password-update repository code.
+
 ## Next step
-Finish T1 review, open PR 1, then T2.
+Open PR 1 (T1, T1b, T1c) against `main`, then T2.
