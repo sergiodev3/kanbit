@@ -13,3 +13,8 @@ export function createPrismaClient(databaseUrl: string): PrismaClient {
 export async function pingDatabase(prisma: PrismaClient): Promise<void> {
   await prisma.$queryRaw`SELECT 1`;
 }
+
+/** Prisma unique-constraint violation (P2002), checked structurally so callers need no runtime import. */
+export function isUniqueViolation(err: unknown): boolean {
+  return typeof err === 'object' && err !== null && 'code' in err && err.code === 'P2002';
+}
