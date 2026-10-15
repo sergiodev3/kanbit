@@ -11,8 +11,8 @@ export function createAuthRouter({ requireAuth, rateLimit, ...deps }: AuthRouter
   const controller = createAuthController(deps);
   const router = Router();
 
-  router.post('/auth/register', createAuthRateLimiter(rateLimit), controller.register);
-  router.post('/auth/login', createAuthRateLimiter(rateLimit), controller.login);
+  router.post('/auth/register', ...createAuthRateLimiter(rateLimit), controller.register);
+  router.post('/auth/login', ...createAuthRateLimiter(rateLimit), controller.login);
   router.post('/auth/logout', controller.logout);
   router.get('/auth/me', requireAuth, controller.me);
   router.post('/auth/change-password', requireAuth, controller.changePassword);

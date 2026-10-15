@@ -5,28 +5,11 @@ import { loadEnv } from './config/env';
 import { systemClock } from './lib/clock';
 import { createLogger } from './lib/logger';
 import { createPrismaClient, pingDatabase } from './lib/prisma';
-import { ensureSeedTeacher } from './seed/teacher';
+import { describeSeedTeacherResult, ensureSeedTeacher } from './seed/teacher';
 
 const env = loadEnv();
 const logger = createLogger(env.NODE_ENV === 'production' ? 'info' : 'debug');
 const prisma = createPrismaClient(env.DATABASE_URL);
-
-if (env.SEED_TEACHER_USERNAME && env.SEED_TEACHER_PASSWORD) {
-  try {
-    const seed = await ensureSeedTeacher(prisma, {
-      username: env.SEED_TEACHER_USERNAME,
-      password: env.SEED_TEACHER_PASSWORD,
-      name: env.SEED_TEACHER_NAME,
-    });
-    if (seed.role !== 'TEACHER') logger.warn('seed teacher username belongs to a student; skipped');
-    else logger.info({ created: seed.created }, 'seed teacher ensured');
-  } catch (err) {
-    // Keep booting: /health reports the database problem.
-    logger.error({ err }, 'seed teacher failed');
-  }
-} else if (env.SEED_TEACHER_USERNAME || env.SEED_TEACHER_PASSWORD) {
-  logger.warn('set both SEED_TEACHER_USERNAME and SEED_TEACHER_PASSWORD to seed the teacher');
-}
 
 const app = createApp({
   pingDb: () => pingDatabase(prisma),
@@ -42,8 +25,31 @@ const app = createApp({
   logger,
 });
 
+/** Runs after `listen` and never throws: /health stays up even if the database hangs or the seed fails. */
+async function seedTeacherInBackground(): Promise<void> {
+  if (!env.SEED_TEACHER_USERNAME || !env.SEED_TEACHER_PASSWORD) {
+    if (env.SEED_TEACHER_USERNAME || env.SEED_TEACHER_PASSWORD) {
+      logger.warn('set both SEED_TEACHER_USERNAME and SEED_TEACHER_PASSWORD to seed the teacher');
+    }
+    return;
+  }
+  try {
+    const result = await ensureSeedTeacher(prisma, {
+      username: env.SEED_TEACHER_USERNAME,
+      password: env.SEED_TEACHER_PASSWORD,
+      name: env.SEED_TEACHER_NAME,
+    });
+    const { level, message } = describeSeedTeacherResult(result);
+    logger[level]({ outcome: result.outcome }, message);
+  } catch (err) {
+    // Keep running: /health reports the database problem.
+    logger.error({ err }, 'seed teacher failed');
+  }
+}
+
 const server = app.listen(env.PORT, () => {
   logger.info({ port: env.PORT }, 'kanbit api listening');
+  void seedTeacherInBackground();
 });
 
 let shuttingDown = false;

@@ -64,15 +64,24 @@ export function createAuthService({
   let dummyHash: Promise<string> | undefined;
   const getDummyHash = () => (dummyHash ??= passwords.hash('kanbit-timing-equaliser'));
 
+  /** Access-code and username rules; returns the group to join. */
+  async function checkRegistration(repo: AuthRepository, input: RegisterRequest): Promise<{ id: string }> {
+    const group = await repo.findGroupByAccessCode(input.accessCode);
+    if (!group) throw new AppError(404, 'INVALID_ACCESS_CODE', 'Unknown group access code');
+    if (!group.accessOpen) throw new AppError(403, 'REGISTRATION_CLOSED', 'Registration is closed for this group');
+    if (await repo.findUserByUsername(input.username)) throw usernameTaken();
+    return group;
+  }
+
   return {
     async register(input) {
+      // Cheap checks first so invalid requests never pay for (or trigger) an argon2 hash.
+      await checkRegistration(repository, input);
       const passwordHash = await passwords.hash(input.password);
 
       const user = await repository.transaction(async (tx) => {
-        const group = await tx.findGroupByAccessCode(input.accessCode);
-        if (!group) throw new AppError(404, 'INVALID_ACCESS_CODE', 'Unknown group access code');
-        if (!group.accessOpen) throw new AppError(403, 'REGISTRATION_CLOSED', 'Registration is closed for this group');
-        if (await tx.findUserByUsername(input.username)) throw usernameTaken();
+        // Re-checked inside the transaction: the group may have closed meanwhile.
+        const group = await checkRegistration(tx, input);
 
         const created = await tx.createStudent({
           name: input.name,

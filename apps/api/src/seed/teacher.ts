@@ -9,12 +9,10 @@ export interface SeedTeacherOptions {
   name?: string;
 }
 
-export interface SeedTeacherResult {
-  created: boolean;
-  userId: string;
-  /** Role of the account holding the username; a STUDENT here means the seed was skipped. */
-  role: Role;
-}
+/** `conflict`: the username belongs to a non-teacher account, a misconfiguration; nothing was changed. */
+export type SeedTeacherResult =
+  | { outcome: 'created' | 'existing'; userId: string }
+  | { outcome: 'conflict'; userId: string; role: Role };
 
 export interface SeedTeacherStore {
   findByUsername(username: string): Promise<{ id: string; role: Role } | null>;
@@ -27,14 +25,33 @@ const DEFAULT_TEACHER_NAME = 'Docente';
 export async function seedTeacher(store: SeedTeacherStore, options: SeedTeacherOptions): Promise<SeedTeacherResult> {
   const username = normalizeUsername(options.username);
   const existing = await store.findByUsername(username);
-  if (existing) return { created: false, userId: existing.id, role: existing.role };
+  if (existing) {
+    return existing.role === 'TEACHER'
+      ? { outcome: 'existing', userId: existing.id }
+      : { outcome: 'conflict', userId: existing.id, role: existing.role };
+  }
 
   const created = await store.createTeacher({
     username,
     name: options.name?.trim() || DEFAULT_TEACHER_NAME,
     passwordHash: await hashPassword(options.password),
   });
-  return { created: true, userId: created.id, role: 'TEACHER' };
+  return { outcome: 'created', userId: created.id };
+}
+
+/** One message per outcome, shared by the boot path and `pnpm db:seed`. */
+export function describeSeedTeacherResult(result: SeedTeacherResult): { level: 'info' | 'error'; message: string } {
+  switch (result.outcome) {
+    case 'created':
+      return { level: 'info', message: 'seed teacher created' };
+    case 'existing':
+      return { level: 'info', message: 'seed teacher already exists; password left unchanged' };
+    case 'conflict':
+      return {
+        level: 'error',
+        message: `seed teacher misconfigured: SEED_TEACHER_USERNAME belongs to a ${result.role} account; nothing was changed`,
+      };
+  }
 }
 
 function prismaSeedStore(prisma: PrismaClient): SeedTeacherStore {

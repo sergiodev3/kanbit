@@ -39,8 +39,12 @@ The teacher creates a group; two students register with the code and end up in a
   (moderator or teacher).
 
 ## Tasks
-- [ ] T1 Shared auth/users DTOs + API auth core: `http/auth.ts`, `lib/password.ts`, auth + users modules, seed,
-  rate limit, `AppDeps` changes, tests (~650 lines) — route: delegated (2+ non-trivial files)
+- [x] T1 Shared auth/users DTOs + API auth core: `http/auth.ts`, `lib/password.ts`, auth + users modules, seed,
+  rate limit, `AppDeps` changes, tests (~650 lines forecast, 1638 actual) — route: delegated (2+ non-trivial files)
+  — commit 9dba977
+- [x] T1b Auth hardening from T1 review advisories (user-authorized): per-IP failure limiter (50/15 min, per route)
+  alongside IP+username, hash after cheap register checks, seed after `listen`, seed conflict with a STUDENT username
+  fails loudly (`db:seed` exits 1) — route: delegated — api 51 tests green (writer + parent spot check)
 - [ ] T2 API groups/teams/projects + `http/authz.ts`, access code, `planMembers` rules, tests (~700) — route: delegated
 - [ ] T3 Web auth + routing: api helpers, session, role guard, login/register/profile, layout, tests (~500) — route: delegated
 - [ ] T4 Web teacher panel, my-team placeholder, projects panel, README, deploy + production smoke test (~650) — route: delegated
@@ -50,11 +54,27 @@ The teacher creates a group; two students register with the code and end up in a
 - Production smoke: teacher creates group; two students register with the code; teacher puts both in a team.
 
 ## Delivery
-- Forecast ~2500 authored lines (> 400): strategy `ask-on-risk`; chain strategy pending user answer.
+- Forecast ~2500 authored lines (> 400): strategy `ask-on-risk`; chain strategy `stacked-to-main` (user, Oct 15).
+- Slices: PR 1 = T1 (9dba977).
 
 ## Progress / evidence
 - Branch `feat/phase-1-auth-teacher` from `main` d9b34b8.
 - RDD: on (default).
+- T1 writer: `pnpm -r typecheck` ok; `pnpm -r test` shared 11, api 43, web 3 (web flaked once with "no tests" under
+  parallel load, green on re-run); `pnpm -r build` ok (jose/argon2/rate-limit external); `prisma validate` ok;
+  built server boots with unreachable DB (seed failure logged). Parent spot check: api typecheck + 43 tests green.
+- T1 deviations accepted: `*.repository.ts` Prisma adapters behind service interfaces (HTTP tests run real services
+  on an in-memory store); rate limit keyed by IP + username counting failures only (spec §13.2; avoids locking a
+  classroom behind one IP), 429 `RATE_LIMITED`; empty `SEED_TEACHER_*` treated as unset; optional `SEED_TEACHER_NAME`.
+- T1 API contract for T3: login 200 / register 201 return `MeResponse` + cookie; logout and change-password 204;
+  `INVALID_CURRENT_PASSWORD` 400, `INVALID_ACCESS_CODE` 404, `REGISTRATION_CLOSED` 403, `USERNAME_TAKEN` 409,
+  `USER_NOT_FOUND` 404, `FORBIDDEN` 403; messages in English, web localises by `code`. Access codes uppercase;
+  usernames 3–32 `[a-z0-9._-]`, passwords 8–128.
+- T1 RDD: assessed high (`hot_path` auth); user granted; 4-lens review approved, acknowledged (authority burned).
+  12 advisories; the user authorized T1b for the rate-limit bypass, hash order, boot seed, and seed conflict.
+  Remaining advisories (not fixed): reset doesn't revoke sessions (accepted for v1.0), login username max magic number,
+  sync throws in async handlers (Express 5 forwards them).
+- Not yet run against a real DB: Prisma repositories, `pnpm db:seed`.
 
 ## Next step
-T1.
+Finish T1 review, open PR 1, then T2.

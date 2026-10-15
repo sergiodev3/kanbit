@@ -109,6 +109,32 @@ describe('POST /auth/login', () => {
     // Classmates behind the same school IP are not locked out.
     expect((await login('maestra', 'teacher-pass')).status).toBe(200);
   });
+
+  it('rate-limits one IP that rotates usernames after 50 failures', async () => {
+    const { login } = await setup({ rateLimit: true });
+
+    for (let i = 0; i < 50; i++) {
+      expect((await login(`ghost${i}`, 'wrong-pass')).status).toBe(401);
+    }
+    const limited = await login('ghost-next', 'wrong-pass');
+
+    expect(limited.status).toBe(429);
+    expect(limited.body.error.code).toBe('RATE_LIMITED');
+  });
+
+  it('does not spend the per-IP failure budget on successful logins', async () => {
+    const { login } = await setup({ rateLimit: true });
+
+    for (let i = 0; i < 49; i++) {
+      expect((await login(`ghost${i}`, 'wrong-pass')).status).toBe(401);
+    }
+    for (let i = 0; i < 5; i++) {
+      expect((await login('a0001', 'student-pass')).status).toBe(200);
+    }
+    // The 50th failure is still allowed; only the 51st is limited.
+    expect((await login('ghost-49', 'wrong-pass')).status).toBe(401);
+    expect((await login('ghost-50', 'wrong-pass')).status).toBe(429);
+  });
 });
 
 describe('GET /auth/me', () => {
@@ -244,6 +270,22 @@ describe('POST /auth/register', () => {
 
     expect(res.status).toBe(400);
     expect(res.body.error.code).toBe('VALIDATION_ERROR');
+  });
+
+  it('rate-limits one IP that rotates usernames after 50 failures', async () => {
+    const { app } = await setup({ rateLimit: true });
+    const register = (username: string) =>
+      request(app)
+        .post('/api/v1/auth/register')
+        .send({ ...body, accessCode: 'ZZZZZZ', username });
+
+    for (let i = 0; i < 50; i++) {
+      expect((await register(`b-user-${i}`)).status).toBe(404);
+    }
+    const limited = await register('b-next');
+
+    expect(limited.status).toBe(429);
+    expect(limited.body.error.code).toBe('RATE_LIMITED');
   });
 });
 

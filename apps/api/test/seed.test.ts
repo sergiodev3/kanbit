@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { verifyPassword } from '../src/lib/password';
-import { type SeedTeacherStore, seedTeacher } from '../src/seed/teacher';
+import { type SeedTeacherStore, describeSeedTeacherResult, seedTeacher } from '../src/seed/teacher';
 
 function memoryStore() {
   const users: { id: string; username: string; name: string; role: 'TEACHER' | 'STUDENT'; passwordHash: string }[] = [];
@@ -21,7 +21,7 @@ describe('seedTeacher', () => {
 
     const result = await seedTeacher(store, { username: '  Maestra ', password: 'teacher-pass' });
 
-    expect(result).toMatchObject({ created: true, role: 'TEACHER' });
+    expect(result).toMatchObject({ outcome: 'created' });
     expect(users).toHaveLength(1);
     expect(users[0]).toMatchObject({ username: 'maestra', name: 'Docente', role: 'TEACHER' });
     expect(await verifyPassword(users[0]?.passwordHash ?? '', 'teacher-pass')).toBe(true);
@@ -34,9 +34,21 @@ describe('seedTeacher', () => {
 
     const again = await seedTeacher(store, { username: 'MAESTRA', password: 'second-pass' });
 
-    expect(again).toMatchObject({ created: false, role: 'TEACHER' });
+    expect(again).toMatchObject({ outcome: 'existing', userId: users[0]?.id });
     expect(users).toHaveLength(1);
     expect(users[0]?.passwordHash).toBe(originalHash);
     expect(users[0]?.name).toBe('Maestra Ruiz');
+  });
+
+  it('reports a conflict when the username belongs to a non-teacher account and leaves it untouched', async () => {
+    const { users, store } = memoryStore();
+    users.push({ id: 's1', username: 'maestra', name: 'Ana', role: 'STUDENT', passwordHash: 'student-hash' });
+
+    const result = await seedTeacher(store, { username: 'Maestra', password: 'teacher-pass' });
+
+    expect(result).toEqual({ outcome: 'conflict', userId: 's1', role: 'STUDENT' });
+    expect(users).toHaveLength(1);
+    expect(users[0]).toMatchObject({ role: 'STUDENT', passwordHash: 'student-hash' });
+    expect(describeSeedTeacherResult(result).level).toBe('error');
   });
 });
