@@ -10,3 +10,6 @@ apps/api/src/generated/
 .vercel/
 .DS_Store
 *.log
+
+# Local agent tooling
+.atl/
