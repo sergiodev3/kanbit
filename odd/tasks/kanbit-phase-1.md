@@ -44,7 +44,10 @@ The teacher creates a group; two students register with the code and end up in a
   — commit 9dba977
 - [x] T1b Auth hardening from T1 review advisories (user-authorized): per-IP failure limiter (50/15 min, per route)
   alongside IP+username, hash after cheap register checks, seed after `listen`, seed conflict with a STUDENT username
-  fails loudly (`db:seed` exits 1) — route: delegated — api 51 tests green (writer + parent spot check)
+  fails loudly (`db:seed` exits 1) — route: delegated — api 51 tests green (writer + parent spot check) — commit fbe6f7b
+- [x] T1c Per-IP limiter counts only guesses (401/403/404); 400/409/429 no longer drain a classroom's budget;
+  JSDoc states budgets are per route (user-authorized from T1b + branch review advisories) — route: inline
+  (one mechanical file + tests) — RED 2 failing → GREEN api 53 tests
 - [ ] T2 API groups/teams/projects + `http/authz.ts`, access code, `planMembers` rules, tests (~700) — route: delegated
 - [ ] T3 Web auth + routing: api helpers, session, role guard, login/register/profile, layout, tests (~500) — route: delegated
 - [ ] T4 Web teacher panel, my-team placeholder, projects panel, README, deploy + production smoke test (~650) — route: delegated
@@ -74,6 +77,10 @@ The teacher creates a group; two students register with the code and end up in a
   12 advisories; the user authorized T1b for the rate-limit bypass, hash order, boot seed, and seed conflict.
   Remaining advisories (not fixed): reset doesn't revoke sessions (accepted for v1.0), login username max magic number,
   sync throws in async handlers (Express 5 forwards them).
+- T1b RDD: assessed high; user granted; approved, acknowledged (burned). Branch review (main..fbe6f7b, requested by the
+  stop hook, user granted): approved, acknowledged (burned). Both flagged the per-IP limiter → T1c.
+  Remaining advisories: session not revoked on password change/reset (accepted v1.0), Prisma repositories unproved
+  against a real DB, seed race untested.
 - Not yet run against a real DB: Prisma repositories, `pnpm db:seed`.
 
 ## Next step

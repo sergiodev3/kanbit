@@ -135,6 +135,19 @@ describe('POST /auth/login', () => {
     expect((await login('ghost-49', 'wrong-pass')).status).toBe(401);
     expect((await login('ghost-50', 'wrong-pass')).status).toBe(429);
   });
+
+  it('does not spend the per-IP budget on 429s from the per-username limiter', async () => {
+    const { login } = await setup({ rateLimit: true });
+
+    for (let i = 0; i < 10; i++) {
+      expect((await login('a0001', 'wrong-pass')).status).toBe(401);
+    }
+    for (let i = 0; i < 40; i++) {
+      expect((await login('a0001', 'wrong-pass')).status).toBe(429);
+    }
+    // Only 10 guesses were spent, so a classmate's typo is still a plain 401.
+    expect((await login('ghost0', 'wrong-pass')).status).toBe(401);
+  });
 });
 
 describe('GET /auth/me', () => {
@@ -286,6 +299,29 @@ describe('POST /auth/register', () => {
 
     expect(limited.status).toBe(429);
     expect(limited.body.error.code).toBe('RATE_LIMITED');
+  });
+
+  it('does not spend the per-IP budget on validation errors or taken usernames', async () => {
+    const { app } = await setup({ rateLimit: true });
+
+    for (let i = 0; i < 45; i++) {
+      const res = await request(app)
+        .post('/api/v1/auth/register')
+        .send({ ...body, username: `c-user-${i}`, password: 'short' });
+      expect(res.status).toBe(400);
+    }
+    // Stay under the per-username limit (10) for each taken username.
+    for (const username of ['a0001', 'maestra']) {
+      for (let i = 0; i < 9; i++) {
+        const res = await request(app).post('/api/v1/auth/register').send({ ...body, username });
+        expect(res.status).toBe(409);
+      }
+    }
+    const res = await request(app)
+      .post('/api/v1/auth/register')
+      .send({ ...body, accessCode: 'ZZZZZZ', username: 'c-next' });
+
+    expect(res.status).toBe(404);
   });
 });
 
