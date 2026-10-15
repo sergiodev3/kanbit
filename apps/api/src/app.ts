@@ -12,7 +12,16 @@ import { createLogger, type Logger } from './lib/logger';
 import { createPrismaAuthRepository } from './modules/auth/auth.repository';
 import { createAuthRouter } from './modules/auth/auth.routes';
 import { type AuthService, createAuthService } from './modules/auth/auth.service';
+import { createPrismaGroupsRepository } from './modules/groups/groups.repository';
+import { createGroupsRouter } from './modules/groups/groups.routes';
+import { createGroupsService, type GroupsService } from './modules/groups/groups.service';
 import { createHealthRouter } from './modules/health/health.routes';
+import { createPrismaProjectsRepository } from './modules/projects/projects.repository';
+import { createProjectsRouter } from './modules/projects/projects.routes';
+import { createProjectsService, type ProjectsService } from './modules/projects/projects.service';
+import { createPrismaTeamsRepository } from './modules/teams/teams.repository';
+import { createTeamsRouter } from './modules/teams/teams.routes';
+import { createTeamsService, type TeamsService } from './modules/teams/teams.service';
 import { createPrismaUsersRepository } from './modules/users/users.repository';
 import { createUsersRouter } from './modules/users/users.routes';
 import { createUsersService, type UsersService } from './modules/users/users.service';
@@ -20,6 +29,9 @@ import { createUsersService, type UsersService } from './modules/users/users.ser
 export interface AppServices {
   auth: AuthService;
   users: UsersService;
+  groups: GroupsService;
+  teams: TeamsService;
+  projects: ProjectsService;
 }
 
 export interface AppDeps {
@@ -46,6 +58,12 @@ function resolveServices({ prisma, services = {} }: AppDeps): AppServices {
   return {
     auth: services.auth ?? createAuthService({ repository: createPrismaAuthRepository(requirePrisma('auth')) }),
     users: services.users ?? createUsersService({ repository: createPrismaUsersRepository(requirePrisma('users')) }),
+    groups:
+      services.groups ?? createGroupsService({ repository: createPrismaGroupsRepository(requirePrisma('groups')) }),
+    teams: services.teams ?? createTeamsService({ repository: createPrismaTeamsRepository(requirePrisma('teams')) }),
+    projects:
+      services.projects ??
+      createProjectsService({ repository: createPrismaProjectsRepository(requirePrisma('projects')) }),
   };
 }
 
@@ -78,6 +96,9 @@ export function createApp(deps: AppDeps): Express {
     createAuthRouter({ service: services.auth, config: deps.auth, clock: deps.clock, requireAuth, rateLimit }),
   );
   api.use(createUsersRouter({ service: services.users, requireAuth }));
+  api.use(createGroupsRouter({ service: services.groups, requireAuth }));
+  api.use(createTeamsRouter({ service: services.teams, requireAuth }));
+  api.use(createProjectsRouter({ service: services.projects, requireAuth }));
   app.use('/api/v1', api);
 
   app.use(notFoundHandler);
