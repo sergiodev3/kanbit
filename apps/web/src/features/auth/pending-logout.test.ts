@@ -80,6 +80,15 @@ describe('pending logout', () => {
     expect(hasPendingLogout()).toBe(false);
   });
 
+  it('gives up after the timeout when the retried logout hangs, keeping the marker', async () => {
+    mockApi({ 'POST /auth/logout': () => new Promise<Response>(() => {}) });
+    markPendingLogout();
+
+    await retryPendingLogout({ timeoutMs: 20 });
+
+    expect(hasPendingLogout()).toBe(true);
+  });
+
   it('does nothing when no logout is pending', async () => {
     const fetchMock = mockApi({});
 
