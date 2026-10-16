@@ -195,7 +195,8 @@ describe('GET /auth/me', () => {
 
   it('returns the user with group and team memberships', async () => {
     const { app, login, db, group, student } = await setup();
-    db.teamMembers.push({ teamId: 'team1', teamName: 'Los Bits', groupId: group.id, userId: student.id, isModerator: true });
+    const team = db.addTeam({ name: 'Los Bits', groupId: group.id });
+    db.addTeamMember({ teamId: team.id, userId: student.id, isModerator: true });
     const cookie = sessionCookie(await login('a0001', 'student-pass'));
 
     const res = await request(app).get('/api/v1/auth/me').set('Cookie', cookie);
@@ -205,7 +206,7 @@ describe('GET /auth/me', () => {
     expect(res.body).toEqual({
       user: { id: student.id, name: 'Ana', username: 'a0001', role: 'STUDENT' },
       memberships: [
-        { groupId: group.id, groupName: '5A Programacion', teamId: 'team1', teamName: 'Los Bits', isModerator: true },
+        { groupId: group.id, groupName: '5A Programacion', teamId: team.id, teamName: 'Los Bits', isModerator: true },
       ],
     });
   });

@@ -48,7 +48,8 @@ The teacher creates a group; two students register with the code and end up in a
 - [x] T1c Per-IP limiter counts only guesses (401/403/404); 400/409/429 no longer drain a classroom's budget;
   JSDoc states budgets are per route (user-authorized from T1b + branch review advisories) — route: inline
   (one mechanical file + tests) — RED 2 failing → GREEN api 53 tests
-- [ ] T2 API groups/teams/projects + `http/authz.ts`, access code, `planMembers` rules, tests (~700) — route: delegated
+- [x] T2 API groups/teams/projects + `http/authz.ts`, access code, `planMembers` rules, tests (~700 forecast, ~2250
+  actual: mostly tests and the in-memory store) — route: delegated — api 109 tests, shared 21 (writer + parent spot check)
 - [ ] T3 Web auth + routing: api helpers, session, role guard, login/register/profile, layout, tests (~500) — route: delegated
 - [ ] T4 Web teacher panel, my-team placeholder, projects panel, README, deploy + production smoke test (~650) — route: delegated
 
@@ -90,5 +91,24 @@ The teacher creates a group; two students register with the code and end up in a
   fails on deploy, restart the service once the DB is up); login username max 64 is a bare literal; seed password has
   no 128 max; duplicated password-update repository code.
 
+- PR 1 #4 merged (8107815). Railway env added after merge (`COOKIE_DOMAIN`, `SEED_TEACHER_*`), redeployed.
+  Production smoke (Oct 15): health 200 db ok; `/auth/me` 401; bad login 401; bad code register 404; CORS allows
+  `https://kanbit.app` with credentials. Teacher login not verified by the agent (password stays with the user).
+- T2 (branch `feat/phase-1-groups-teams-api` from main 8107815): all slices RED→GREEN; end-to-end done-criterion test
+  `phase1-flow` over the in-memory store. Deviations accepted: no `expectedUpdatedAt` on group/team/project PATCH
+  (spec §5.3.1 names only cards, check-ins, notes, comments); released cards also clear `sprintId`/validation;
+  a moved student's old team is re-planned (renumber, moderator, release cards); 409 `MEMBERS_CONFLICT` on races.
+  Prisma repositories still not run against Postgres.
+- T2 API contract for T4: lists are bare arrays, dates ISO. Group `{id,name,accessCode,accessOpen,updatedAt}`
+  (+`teamCount,studentCount` in list; +`students[{id,name,username,teamId}]`, `teams[{id,name,moderatorId,memberCount}]`
+  in detail). Team `{id,groupId,name,moderatorId,updatedAt,members[{userId,name,username,isModerator,rowOrder}]}`.
+  Project `{id,teamId,name,updatedAt}`. Errors: `FORBIDDEN` 403; `GROUP_/TEAM_/PROJECT_NOT_FOUND` 404;
+  `INVALID_MEMBERS` 400 (details.userIds); `NOT_A_TEAM_MEMBER` 400; `TEAM_HAS_CARDS` 409; `MEMBERS_CONFLICT` 409.
+  Name limits: group 80, team 60, project 80. `PUT members` max 50 distinct ids.
+- Slices: PR 2 = T2 (025bb99).
+- T2 RDD: assessed high; user granted; 4-lens review approved, acknowledged (burned). Advisories (follow-ups):
+  concurrent `PUT members` on the same team can surface a 500 (P2025) instead of 409; Prisma repositories unproved
+  against Postgres (no unique on `rowOrder`/moderator in the schema, so one-by-one updates are safe).
+
 ## Next step
-Open PR 1 (T1, T1b, T1c) against `main`, then T2.
+Review T2, open PR 2 against `main`, then T3.
