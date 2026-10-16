@@ -58,7 +58,10 @@ The teacher creates a group; two students register with the code and end up in a
   error on client validation failure — route: delegated — web 44 tests (writer + parent spot check). The 401 "loop"
   finding was not real (`fetchMe` maps 401 to null). Note: a network-failed logout leaves the server cookie valid;
   an amber notice tells the user.
-- [ ] T4 Web teacher panel, my-team placeholder, projects panel, README, deploy + production smoke test (~650) — route: delegated
+- [ ] T3c Offline logout on shared devices (user-authorized from PR 3 review, all 4 lenses): persist a pending-logout
+  marker and retry `POST /auth/logout` on reconnect/app start before trusting `/auth/me` — route: delegated, after T4
+  (same branch; no parallel writers)
+- [x] T4 (code + README part; deploy smoke pending) Web teacher panel, my-team placeholder, projects panel, README, deploy + production smoke test (~650) — route: delegated
 
 ## Checks
 - `pnpm -r typecheck`, `pnpm -r test`, `pnpm -r build` green.
@@ -138,5 +141,14 @@ The teacher creates a group; two students register with the code and end up in a
   test assertion is weak; notice wording. A second combined review (T2+T3+T3b, stop hook, user granted) stopped with
   `lens_context_budget_exceeded` again.
 
+- PR 2 #5 merged (2f3d538); Railway deployed (`GET /groups` → 401). PR 3 #6 opened (T3, T3b, AGENTS.md); a full-slice
+  review (stop hook, user granted) approved, acknowledged (burned) — all 4 lenses flagged offline logout → T3c.
+- T4 (branch `feat/phase-1-teacher-panel`, stacked on T3): 5 slices RED→GREEN; web 63 tests (writer + parent spot check);
+  typecheck/build ok; `sw.js` unchanged (app shell only). Pages: `/teacher` GroupsPage, `/teacher/groups/:groupId`
+  GroupDetailPage (copy link, regenerate with in-app confirm, open/close, students + "Sin equipo", reset password shown
+  once), TeamEditor (members incl. moves, moderator, delete), ProjectsPanel (teacher + moderator; members read-only),
+  `/team` TeamHomePage. Shared UI: `Dialog`/`ConfirmDialog` (focus trap), `CopyButton`, `NameForm`. README Phase 1 docs.
+  Deviations accepted: responses typed, not zod-parsed at runtime; reset asks for confirmation; group create opens detail.
+
 ## Next step
-Open PR 3 (T3, T3b) after PR 2 merges, then T4.
+Commit T4, then T3c on the same branch, review, open PR 4 after PR 3 merges, deploy and run the production smoke.

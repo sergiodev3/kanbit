@@ -104,6 +104,14 @@ describe('app routes', () => {
     expect(screen.getByText(/no se pudo avisar al servidor/)).toBeInTheDocument();
   });
 
+  it('opens a group detail for teachers only', async () => {
+    mockApi({ 'GET /auth/me': () => jsonResponse(200, meFixture('STUDENT')) });
+
+    const { router } = renderRoutes(routes, ['/teacher/groups/g1']);
+
+    await waitFor(() => expect(router.state.location.pathname).toBe('/team'));
+  });
+
   it('keeps the service status page public', async () => {
     mockApi({
       'GET /auth/me': unauthenticated,
