@@ -151,5 +151,15 @@ The teacher creates a group; two students register with the code and end up in a
   `/team` TeamHomePage. Shared UI: `Dialog`/`ConfirmDialog` (focus trap), `CopyButton`, `NameForm`. README Phase 1 docs.
   Deviations accepted: responses typed, not zod-parsed at runtime; reset asks for confirmation; group create opens detail.
 
+- PR 3 #6 merged; `https://kanbit.app/login` → 200. A T3+T3b+T4 accumulated review (stop hook, user granted) approved,
+  acknowledged (burned).
+- T4 RDD: assessed medium (`slice_budget_reached`); user granted; reliability lens approved, acknowledged (burned).
+- T3c RDD: assessed high; user granted; approved, acknowledged (burned). PR 4 slice review (T4+T3c, stop hook, user
+  granted): approved, acknowledged (burned).
+- Open advisories (follow-ups): saving a team is two non-atomic requests (PUT members then PATCH moderator); login
+  awaits the pending-logout retry with no timeout; an in-flight retry can revoke a just-issued session (fails safe);
+  the amber notice shows for any non-401 logout failure (also 5xx while online).
+- Slices: PR 4 = T4 (955e891) + T3c (d329111).
+
 ## Next step
-Commit T4, then T3c on the same branch, review, open PR 4 after PR 3 merges, deploy and run the production smoke.
+Open PR 4, merge, deploy, and run the production smoke of the done criterion.
