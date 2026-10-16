@@ -53,11 +53,15 @@ export function useRegister() {
   });
 }
 
+/**
+ * Logging out always ends the local session, even when the request fails: a 401 means the
+ * cookie had already expired, and on a network error the device must still be left signed out.
+ */
 export function useLogout() {
   const client = useQueryClient();
   return useMutation({
     mutationFn: () => apiPost('/auth/logout'),
-    onSuccess: () => setSession(client, null),
+    onSettled: () => setSession(client, null),
   });
 }
 

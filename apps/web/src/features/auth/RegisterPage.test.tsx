@@ -1,4 +1,4 @@
-import { fireEvent, screen } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import type { RouteObject } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { errorResponse, jsonResponse, meFixture, mockApi, renderRoutes, requestBody, unauthenticated } from '../../test/utils';
@@ -72,5 +72,21 @@ describe('RegisterPage', () => {
     fill({ name: 'Luis', username: 'a001', password: 'secreto123', confirm: 'secreto123' });
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Ese usuario ya está registrado.');
+  });
+
+  it('drops an earlier server error when the form fails client-side validation', async () => {
+    mockApi({
+      'GET /auth/me': unauthenticated,
+      'POST /auth/register': () => errorResponse(409, 'USERNAME_TAKEN'),
+    });
+
+    renderRoutes(routes, ['/register?code=ABC123']);
+    fill({ name: 'Luis', username: 'a001', password: 'secreto123', confirm: 'secreto123' });
+    expect(await screen.findByRole('alert')).toHaveTextContent('Ese usuario ya está registrado.');
+
+    fill({ name: 'Luis', username: 'a002', password: 'secreto123', confirm: 'secreto124' });
+
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Las contraseñas no coinciden.'));
+    expect(screen.getByRole('alert')).not.toHaveTextContent('Ese usuario ya está registrado.');
   });
 });

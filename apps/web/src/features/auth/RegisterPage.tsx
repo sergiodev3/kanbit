@@ -47,7 +47,11 @@ export function RegisterPage() {
     const nextErrors: FieldErrors<Field> = parsed.success ? {} : fieldErrorsFrom(parsed.error.issues, MESSAGES);
     if (confirmPassword !== password) nextErrors.confirmPassword = PASSWORD_MISMATCH;
     setErrors(nextErrors);
-    if (parsed.success && Object.keys(nextErrors).length === 0) register.mutate(parsed.data);
+    if (!parsed.success || Object.keys(nextErrors).length > 0) {
+      register.reset();
+      return;
+    }
+    register.mutate(parsed.data);
   };
 
   const summary = [...orderedErrors(errors, FIELDS), ...(register.isError ? [errorMessage(register.error)] : [])];

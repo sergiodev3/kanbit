@@ -35,4 +35,19 @@ describe('createQueryClient', () => {
 
     expect(client.getQueryData(ME_QUERY_KEY)).toEqual(me);
   });
+
+  it('clears the session when a mutation answers 401 UNAUTHENTICATED', async () => {
+    const client = createQueryClient();
+    client.setQueryData(ME_QUERY_KEY, meFixture('TEACHER'));
+
+    await client
+      .getMutationCache()
+      .build(client, {
+        mutationFn: () => Promise.reject(new ApiError(401, 'UNAUTHENTICATED', 'Authentication required')),
+      })
+      .execute(undefined)
+      .catch(() => undefined);
+
+    expect(client.getQueryData(ME_QUERY_KEY)).toBeNull();
+  });
 });

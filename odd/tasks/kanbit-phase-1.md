@@ -52,7 +52,12 @@ The teacher creates a group; two students register with the code and end up in a
   actual: mostly tests and the in-memory store) — route: delegated — api 109 tests, shared 21 (writer + parent spot check)
 - [x] T3 Web auth + routing: api helpers, session, role guard, login/register/profile, layout, tests (~500 forecast,
   ~1355 actual, half tests) — route: delegated — web 35 tests (writer + parent spot check); branch
-  `feat/phase-1-web-auth` stacked on the T2 branch
+  `feat/phase-1-web-auth` stacked on the T2 branch — commit 5b48536
+- [x] T3b Web session resilience from T3 review (user-authorized): keep the cached session when a background `/auth/me`
+  refetch fails (offline level 1), logout always clears the local session, register form resets a stale server
+  error on client validation failure — route: delegated — web 44 tests (writer + parent spot check). The 401 "loop"
+  finding was not real (`fetchMe` maps 401 to null). Note: a network-failed logout leaves the server cookie valid;
+  an amber notice tells the user.
 - [ ] T4 Web teacher panel, my-team placeholder, projects panel, README, deploy + production smoke test (~650) — route: delegated
 
 ## Checks
@@ -124,5 +129,9 @@ The teacher creates a group; two students register with the code and end up in a
 - PR 2 review: an extra full-T2 review requested by the stop hook was granted by the user but refused by the provider
   before start (`invalid_request`, untracked T3 files in the tree; nothing mutated).
 
+- `AGENTS.md` (user-created copy of the agent guide) committed at the user's request.
+- T3 RDD: assessed high; user granted; approved, acknowledged (burned). A combined T2+T3 review (stop hook, user
+  granted) stopped with `lens_context_budget_exceeded` (not started; terminal; slices already reviewed).
+
 ## Next step
-Commit T3, review it, open PR 3 after PR 2 merges, then T4.
+Review T3b, open PR 3 after PR 2 merges, then T4.

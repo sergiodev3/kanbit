@@ -27,7 +27,9 @@ export function RequireAuth({ role, children }: RequireAuthProps) {
     );
   }
 
-  if (me.isError) {
+  // A failed background refetch keeps the cached session (offline level 1, spec §5.3):
+  // the error state is only for when no session was ever loaded.
+  if (me.isError && me.data === undefined) {
     return (
       <div role="alert" className="space-y-3 rounded-xl bg-red-50 p-4 text-red-900 ring-1 ring-red-200">
         <p>{errorMessage(me.error)}</p>

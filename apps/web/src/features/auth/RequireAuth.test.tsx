@@ -1,7 +1,8 @@
-import { screen, waitFor } from '@testing-library/react';
+import { act, screen, waitFor } from '@testing-library/react';
 import { useLocation, type RouteObject } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { jsonResponse, meFixture, mockApi, renderRoutes, unauthenticated } from '../../test/utils';
+import { ME_QUERY_KEY } from './auth.api';
 import { RequireAuth } from './RequireAuth';
 
 function LoginProbe() {
@@ -55,6 +56,43 @@ describe('RequireAuth', () => {
 
     expect(await screen.findByText('Team area')).toBeInTheDocument();
     await waitFor(() => expect(router.state.location.pathname).toBe('/team'));
+  });
+
+  it('keeps the protected page when a background session refetch fails', async () => {
+    let online = true;
+    mockApi({
+      'GET /auth/me': () => {
+        if (online) return jsonResponse(200, meFixture('TEACHER'));
+        throw new TypeError('Failed to fetch');
+      },
+    });
+
+    const { client } = renderRoutes(routes, ['/teacher']);
+    expect(await screen.findByText('Teacher area')).toBeInTheDocument();
+
+    online = false;
+    await act(async () => {
+      await client.refetchQueries({ queryKey: ME_QUERY_KEY });
+      // Let TanStack Query's batched notifications re-render the observers.
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(client.getQueryState(ME_QUERY_KEY)?.status).toBe('error');
+    expect(screen.getByText('Teacher area')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('shows a retry option when the session cannot be loaded at all', async () => {
+    mockApi({
+      'GET /auth/me': () => {
+        throw new TypeError('Failed to fetch');
+      },
+    });
+
+    renderRoutes(routes, ['/teacher']);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('No se pudo conectar con el servidor');
+    expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument();
   });
 
   it('shows a loading state while the session is being checked', () => {

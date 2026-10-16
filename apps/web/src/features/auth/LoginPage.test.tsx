@@ -74,4 +74,20 @@ describe('LoginPage', () => {
     expect(screen.getByLabelText('Usuario')).toHaveAttribute('aria-invalid', 'true');
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
+
+  it('drops an earlier server error when the form fails client-side validation', async () => {
+    mockApi({
+      'GET /auth/me': unauthenticated,
+      'POST /auth/login': () => errorResponse(401, 'INVALID_CREDENTIALS'),
+    });
+
+    renderRoutes(routes, ['/login']);
+    fillAndSubmit('ana', 'equivocada');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Usuario o contraseña incorrectos.');
+
+    fillAndSubmit('', 'equivocada');
+
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Escribe tu usuario'));
+    expect(screen.getByRole('alert')).not.toHaveTextContent('Usuario o contraseña incorrectos.');
+  });
 });

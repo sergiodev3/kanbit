@@ -41,6 +41,7 @@ export function LoginPage() {
     const parsed = LoginRequest.safeParse({ username, password });
     if (!parsed.success) {
       setErrors(fieldErrorsFrom(parsed.error.issues, MESSAGES));
+      login.reset();
       return;
     }
     setErrors({});

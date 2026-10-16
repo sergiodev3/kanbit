@@ -1,6 +1,6 @@
 import { Link, NavLink, Outlet, useNavigate } from 'react-router';
 import { useLogout, useMe } from '../features/auth/auth.api';
-import { errorMessage } from '../lib/error-messages';
+import { isApiError } from '../lib/api';
 import { InstallButton } from '../shared/pwa/InstallButton';
 import { IosInstallGuide } from '../shared/pwa/IosInstallGuide';
 import { OfflineBanner } from '../shared/pwa/OfflineBanner';
@@ -14,7 +14,10 @@ export function RootLayout() {
   const logout = useLogout();
   const navigate = useNavigate();
 
-  const signOut = () => logout.mutate(undefined, { onSuccess: () => void navigate('/login', { replace: true }) });
+  const signOut = () => logout.mutate(undefined, { onSettled: () => void navigate('/login', { replace: true }) });
+  // A 401 means the session had already ended, so only other failures are worth a notice.
+  // It is hidden again as soon as someone signs back in.
+  const logoutUnconfirmed = logout.isError && !isApiError(logout.error, 'UNAUTHENTICATED') && !me.data;
 
   return (
     <div className="flex min-h-dvh flex-col">
@@ -49,9 +52,9 @@ export function RootLayout() {
           )}
         </div>
       </header>
-      {logout.isError && (
-        <p role="alert" className="bg-red-50 px-4 py-2 text-center text-sm font-semibold text-red-900">
-          No se pudo cerrar la sesión. {errorMessage(logout.error)}
+      {logoutUnconfirmed && (
+        <p role="status" className="bg-amber-50 px-4 py-2 text-center text-sm text-amber-900">
+          Cerraste sesión en este dispositivo, pero no se pudo avisar al servidor. Revisa tu conexión.
         </p>
       )}
       <main className="mx-auto w-full max-w-xl flex-1 p-4">
