@@ -1,14 +1,25 @@
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { onlineManager } from '@tanstack/react-query';
+import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { jsonResponse, meFixture, mockApi, renderRoutes, unauthenticated } from '../test/utils';
 import { ME_QUERY_KEY } from '../features/auth/auth.api';
+import { clearPendingLogout, hasPendingLogout } from '../features/auth/pending-logout';
 import { routes } from './router';
 
 // UpdatePrompt imports `virtual:pwa-register/react`, which exists only under the PWA plugin (not loaded in tests).
 vi.mock('../shared/pwa/UpdatePrompt', () => ({ UpdatePrompt: () => null }));
 
+const OFFLINE_LOGOUT_NOTICE = /se cerrará por completo en el servidor cuando vuelva la conexión/;
+
+const networkError = (): Response => {
+  throw new TypeError('Failed to fetch');
+};
+
 afterEach(() => {
   vi.unstubAllGlobals();
+  clearPendingLogout();
+  localStorage.clear();
+  onlineManager.setOnline(true);
 });
 
 describe('app routes', () => {
@@ -82,26 +93,70 @@ describe('app routes', () => {
       'POST /auth/logout': unauthenticated,
     });
 
-    renderRoutes(routes, ['/teacher']);
+    const { router } = renderRoutes(routes, ['/teacher']);
     fireEvent.click(await screen.findByRole('button', { name: 'Cerrar sesión' }));
 
     expect(await screen.findByRole('heading', { name: 'Iniciar sesión' })).toBeInTheDocument();
-    expect(screen.queryByText(/No se pudo cerrar la sesión/)).not.toBeInTheDocument();
+    await waitFor(() => expect(router.state.location.pathname).toBe('/login'));
+    expect(screen.queryByText(OFFLINE_LOGOUT_NOTICE)).not.toBeInTheDocument();
+    expect(hasPendingLogout()).toBe(false);
   });
 
-  it('notes that the server was not reached when logout fails offline', async () => {
+  it('notes that the server will be told when the connection returns after an offline logout', async () => {
     mockApi({
       'GET /auth/me': () => jsonResponse(200, meFixture('TEACHER')),
-      'POST /auth/logout': () => {
-        throw new TypeError('Failed to fetch');
-      },
+      'POST /auth/logout': networkError,
     });
 
     renderRoutes(routes, ['/teacher']);
     fireEvent.click(await screen.findByRole('button', { name: 'Cerrar sesión' }));
 
     expect(await screen.findByRole('heading', { name: 'Iniciar sesión' })).toBeInTheDocument();
-    expect(screen.getByText(/no se pudo avisar al servidor/)).toBeInTheDocument();
+    expect(screen.getByText(OFFLINE_LOGOUT_NOTICE)).toBeInTheDocument();
+    expect(screen.getByText(/Cerraste sesión en este dispositivo/)).toBeInTheDocument();
+  });
+
+  it('keeps a shared device signed out when /auth/me still accepts the old cookie after an offline logout', async () => {
+    mockApi({
+      'GET /auth/me': () => jsonResponse(200, meFixture('TEACHER')),
+      'POST /auth/logout': networkError,
+    });
+
+    const { router, client } = renderRoutes(routes, ['/teacher']);
+    fireEvent.click(await screen.findByRole('button', { name: 'Cerrar sesión' }));
+    expect(await screen.findByRole('heading', { name: 'Iniciar sesión' })).toBeInTheDocument();
+    expect(hasPendingLogout()).toBe(true);
+
+    // Window focus / reconnect refetches the session while the server still holds the cookie.
+    await act(() => client.refetchQueries({ queryKey: ME_QUERY_KEY }));
+
+    expect(client.getQueryData(ME_QUERY_KEY)).toBeNull();
+    expect(router.state.location.pathname).toBe('/login');
+    expect(screen.queryByText('Ana Docente')).not.toBeInTheDocument();
+    expect(hasPendingLogout()).toBe(true);
+  });
+
+  it('finishes the pending logout on the server when the browser comes back online', async () => {
+    let logoutHandler: () => Response = networkError;
+    const fetchMock = mockApi({
+      'GET /auth/me': () => jsonResponse(200, meFixture('TEACHER')),
+      'POST /auth/logout': () => logoutHandler(),
+    });
+
+    renderRoutes(routes, ['/teacher']);
+    fireEvent.click(await screen.findByRole('button', { name: 'Cerrar sesión' }));
+    expect(await screen.findByRole('heading', { name: 'Iniciar sesión' })).toBeInTheDocument();
+    expect(hasPendingLogout()).toBe(true);
+
+    logoutHandler = () => new Response(null, { status: 204 });
+    act(() => {
+      onlineManager.setOnline(false);
+      onlineManager.setOnline(true);
+    });
+
+    await waitFor(() => expect(hasPendingLogout()).toBe(false));
+    const logoutCalls = fetchMock.mock.calls.filter(([input]) => String(input).endsWith('/auth/logout'));
+    expect(logoutCalls).toHaveLength(2);
   });
 
   it('opens a group detail for teachers only', async () => {

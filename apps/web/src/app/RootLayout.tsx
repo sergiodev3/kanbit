@@ -1,5 +1,5 @@
 import { Link, NavLink, Outlet, useNavigate } from 'react-router';
-import { useLogout, useMe } from '../features/auth/auth.api';
+import { useLogout, useMe, usePendingLogoutRetry } from '../features/auth/auth.api';
 import { isApiError } from '../lib/api';
 import { InstallButton } from '../shared/pwa/InstallButton';
 import { IosInstallGuide } from '../shared/pwa/IosInstallGuide';
@@ -13,10 +13,11 @@ export function RootLayout() {
   const me = useMe();
   const logout = useLogout();
   const navigate = useNavigate();
+  usePendingLogoutRetry();
 
   const signOut = () => logout.mutate(undefined, { onSettled: () => void navigate('/login', { replace: true }) });
-  // A 401 means the session had already ended, so only other failures are worth a notice.
-  // It is hidden again as soon as someone signs back in.
+  // A 401 means the session had already ended, so only other failures are worth a notice: the
+  // logout stays pending and is retried. The notice hides as soon as someone signs back in.
   const logoutUnconfirmed = logout.isError && !isApiError(logout.error, 'UNAUTHENTICATED') && !me.data;
 
   return (
@@ -54,7 +55,8 @@ export function RootLayout() {
       </header>
       {logoutUnconfirmed && (
         <p role="status" className="bg-amber-50 px-4 py-2 text-center text-sm text-amber-900">
-          Cerraste sesión en este dispositivo, pero no se pudo avisar al servidor. Revisa tu conexión.
+          Cerraste sesión en este dispositivo. La sesión se cerrará por completo en el servidor cuando vuelva la
+          conexión.
         </p>
       )}
       <main className="mx-auto w-full max-w-xl flex-1 p-4">

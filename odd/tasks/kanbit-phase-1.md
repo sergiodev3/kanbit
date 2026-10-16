@@ -58,9 +58,10 @@ The teacher creates a group; two students register with the code and end up in a
   error on client validation failure — route: delegated — web 44 tests (writer + parent spot check). The 401 "loop"
   finding was not real (`fetchMe` maps 401 to null). Note: a network-failed logout leaves the server cookie valid;
   an amber notice tells the user.
-- [ ] T3c Offline logout on shared devices (user-authorized from PR 3 review, all 4 lenses): persist a pending-logout
+- [x] T3c Offline logout on shared devices (user-authorized from PR 3 review, all 4 lenses): persist a pending-logout
   marker and retry `POST /auth/logout` on reconnect/app start before trusting `/auth/me` — route: delegated, after T4
-  (same branch; no parallel writers)
+  (same branch; no parallel writers) — web 74 tests (writer + parent spot check). Login/register also retry the
+  pending logout first. Known edge: an in-flight retry finishing after a new login signs the new user out (fails safe).
 - [x] T4 (code + README part; deploy smoke pending) Web teacher panel, my-team placeholder, projects panel, README, deploy + production smoke test (~650) — route: delegated
 
 ## Checks

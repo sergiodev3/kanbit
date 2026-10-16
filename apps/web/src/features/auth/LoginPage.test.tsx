@@ -3,6 +3,7 @@ import type { RouteObject } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { errorResponse, jsonResponse, meFixture, mockApi, renderRoutes, requestBody, unauthenticated } from '../../test/utils';
 import { LoginPage } from './LoginPage';
+import { clearPendingLogout, hasPendingLogout, markPendingLogout } from './pending-logout';
 
 const routes: RouteObject[] = [
   { path: '/login', Component: LoginPage },
@@ -19,6 +20,8 @@ function fillAndSubmit(username: string, password: string) {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  clearPendingLogout();
+  localStorage.clear();
 });
 
 describe('LoginPage', () => {
@@ -36,6 +39,23 @@ describe('LoginPage', () => {
 
     expect(await screen.findByText(home)).toBeInTheDocument();
     expect(requestBody(fetchMock, 'POST /auth/login')).toEqual({ username: 'ana', password: 'secreto123' });
+  });
+
+  it("clears a previous user's pending logout once a new login succeeds", async () => {
+    mockApi({
+      'GET /auth/me': () => jsonResponse(200, meFixture('TEACHER')),
+      'POST /auth/logout': () => {
+        throw new TypeError('Failed to fetch');
+      },
+      'POST /auth/login': () => jsonResponse(200, meFixture('STUDENT')),
+    });
+    markPendingLogout();
+
+    renderRoutes(routes, ['/login']);
+    fillAndSubmit('a001', 'secreto123');
+
+    expect(await screen.findByText('Team home')).toBeInTheDocument();
+    expect(hasPendingLogout()).toBe(false);
   });
 
   it('returns to the page the user originally asked for', async () => {
