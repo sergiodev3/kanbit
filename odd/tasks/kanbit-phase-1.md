@@ -133,5 +133,10 @@ The teacher creates a group; two students register with the code and end up in a
 - T3 RDD: assessed high; user granted; approved, acknowledged (burned). A combined T2+T3 review (stop hook, user
   granted) stopped with `lens_context_budget_exceeded` (not started; terminal; slices already reviewed).
 
+- T3b RDD: assessed high; user granted; approved, acknowledged (burned). Advisories (follow-ups): after an offline
+  logout the still-valid cookie can restore the session on reconnect (no pending-logout marker); the 401-logout router
+  test assertion is weak; notice wording. A second combined review (T2+T3+T3b, stop hook, user granted) stopped with
+  `lens_context_budget_exceeded` again.
+
 ## Next step
-Review T3b, open PR 3 after PR 2 merges, then T4.
+Open PR 3 (T3, T3b) after PR 2 merges, then T4.
