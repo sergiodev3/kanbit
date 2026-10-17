@@ -143,19 +143,41 @@ describe('PUT /teams/:id/members', () => {
     expect(db.teamMembers.filter((row) => row.userId === ana.id)).toHaveLength(1);
   });
 
-  it("sends removed members' unfinished cards back to the backlog unassigned", async () => {
-    const { db, group, ana, beto, putMembers } = await setup();
+  it("sends removed members' unfinished cards back to the backlog unassigned, recording MOVED/ASSIGNED", async () => {
+    const { db, group, teacher, ana, beto, putMembers } = await setup();
     const team = db.addTeam({ name: 'Los Bits', groupId: group.id });
     await putMembers(team.id, [ana.id, beto.id]);
-    const doing = db.addCard({ teamId: team.id, assigneeId: ana.id, status: 'DOING', sprintId: 'sprint1' });
+    const doing = db.addCard({
+      teamId: team.id,
+      assigneeId: ana.id,
+      status: 'DOING',
+      sprintId: 'sprint1',
+      validated: true,
+      validatedById: beto.id,
+    });
+    const backlog = db.addCard({ teamId: team.id, assigneeId: ana.id, status: 'BACKLOG' });
     const done = db.addCard({ teamId: team.id, assigneeId: ana.id, status: 'DONE', sprintId: 'sprint1' });
     const betos = db.addCard({ teamId: team.id, assigneeId: beto.id, status: 'TODO', sprintId: 'sprint1' });
 
     await putMembers(team.id, [beto.id]);
 
-    expect(doing).toMatchObject({ status: 'BACKLOG', assigneeId: null, sprintId: null });
+    expect(doing).toMatchObject({
+      status: 'BACKLOG',
+      assigneeId: null,
+      sprintId: null,
+      validated: false,
+      validatedById: null,
+    });
+    expect(backlog).toMatchObject({ status: 'BACKLOG', assigneeId: null });
     expect(done).toMatchObject({ status: 'DONE', assigneeId: ana.id });
     expect(betos).toMatchObject({ status: 'TODO', assigneeId: beto.id });
+    // The teacher who changed the team is the author of the history rows.
+    const event = { id: expect.any(String), userId: teacher.id, createdAt: expect.any(Date) };
+    expect(db.cardEvents).toEqual([
+      { ...event, cardId: doing.id, type: 'MOVED', fromStatus: 'DOING', toStatus: 'BACKLOG' },
+      { ...event, cardId: doing.id, type: 'ASSIGNED', fromStatus: null, toStatus: null },
+      { ...event, cardId: backlog.id, type: 'ASSIGNED', fromStatus: null, toStatus: null },
+    ]);
   });
 
   it('rejects users who are not students of the group with 400 INVALID_MEMBERS and changes nothing', async () => {

@@ -58,11 +58,14 @@ export const UpdateCardRequest = z
   );
 export type UpdateCardRequest = z.infer<typeof UpdateCardRequest>;
 
-/** `POST /cards/:id/move`: target cell (status + assignee) and the position computed by the client. */
+/**
+ * `POST /cards/:id/move`: target cell (status + assignee) and the position computed by the client with
+ * `positionBetween`. The server checks the position format itself and answers 400 `INVALID_POSITION`.
+ */
 export const MoveCardRequest = z.object({
   status: CardStatus,
   assigneeId: cuid2Id.nullable(),
-  position: CardPosition,
+  position: z.string(),
   dueWeekday: Weekday.optional(),
   doneCriteria: DoneCriteria.optional(),
   expectedUpdatedAt: isoTimestamp.optional(),

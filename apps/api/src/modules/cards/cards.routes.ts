@@ -17,6 +17,7 @@ export function createCardsRouter({ service, requireAuth }: CardsRouterDeps): Ro
   router.get('/cards/:id', requireAuth, controller.get);
   router.patch('/cards/:id', requireAuth, controller.update);
   router.delete('/cards/:id', requireAuth, controller.remove);
+  router.post('/cards/:id/move', requireAuth, controller.move);
 
   return router;
 }

@@ -520,3 +520,154 @@ describe('DELETE /cards/:id', () => {
     expect(db.cards).toHaveLength(0);
   });
 });
+
+describe('POST /cards/:id/move', () => {
+  const LATER = new Date('2026-10-20T17:45:00Z');
+
+  const move = async (ctx: Awaited<ReturnType<typeof setup>>, user: { id: string }, id: string, body: object) =>
+    request(ctx.app).post(ctx.api(`/cards/${id}/move`)).set('Cookie', await ctx.as(user)).send(body);
+
+  /** A card ready to leave the backlog, assigned to `assigneeId`. */
+  const readyCard = (ctx: Awaited<ReturnType<typeof setup>>, assigneeId: string, status: 'TODO' | 'DOING') =>
+    ctx.db.addCard({ teamId: ctx.team.id, assigneeId, status, dueWeekday: 'MON', doneCriteria: 'Demo' });
+
+  it('claims an unassigned card into the mover row (200), bumps updatedAt and records MOVED + ASSIGNED', async () => {
+    const ctx = await setup();
+    const { db, team, member, project, time } = ctx;
+    const card = db.addCard({ teamId: team.id, projectId: project.id, assigneeId: null, status: 'BACKLOG' });
+    time.now = LATER;
+
+    const res = await move(ctx, member, card.id, {
+      status: 'TODO',
+      assigneeId: member.id,
+      position: 'a0',
+      dueWeekday: 'WED',
+      doneCriteria: 'Demo en clase',
+      expectedUpdatedAt: NOW,
+    });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      id: card.id,
+      status: 'TODO',
+      assigneeId: member.id,
+      position: 'a0',
+      dueWeekday: 'WED',
+      doneCriteria: 'Demo en clase',
+      sprintId: null,
+      completedAt: null,
+      updatedAt: LATER.toISOString(),
+    });
+    expect(db.cards[0]).toMatchObject({ status: 'TODO', assigneeId: member.id });
+    const event = { id: expect.any(String), cardId: card.id, userId: member.id, createdAt: LATER };
+    expect(db.cardEvents).toEqual([
+      { ...event, type: 'MOVED', fromStatus: 'BACKLOG', toStatus: 'TODO' },
+      { ...event, type: 'ASSIGNED', fromStatus: null, toStatus: null },
+    ]);
+  });
+
+  it('writes no event for a pure reorder', async () => {
+    const ctx = await setup();
+    const card = readyCard(ctx, ctx.member.id, 'TODO');
+
+    const res = await move(ctx, ctx.member, card.id, { status: 'TODO', assigneeId: ctx.member.id, position: 'Zz' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.position).toBe('Zz');
+    expect(ctx.db.cardEvents).toEqual([]);
+  });
+
+  it('stamps completedAt from the clock entering DONE and clears it leaving DONE', async () => {
+    const ctx = await setup();
+    const { db, member, time } = ctx;
+    const card = readyCard(ctx, member.id, 'DOING');
+    time.now = LATER;
+
+    const done = await move(ctx, member, card.id, { status: 'DONE', assigneeId: member.id, position: 'a0' });
+    expect(done.status).toBe(200);
+    expect(done.body.completedAt).toBe(LATER.toISOString());
+
+    const reopened = await move(ctx, member, card.id, { status: 'DOING', assigneeId: member.id, position: 'a0' });
+    expect(reopened.status).toBe(200);
+    expect(reopened.body.completedAt).toBeNull();
+    expect(db.cardEvents.map((event) => [event.type, event.fromStatus, event.toStatus])).toEqual([
+      ['MOVED', 'DOING', 'DONE'],
+      ['MOVED', 'DONE', 'DOING'],
+    ]);
+  });
+
+  it("forbids a member moving another member's card (403) and lets the moderator do it (200)", async () => {
+    const ctx = await setup();
+    const { db, member, other, moderator, teacher } = ctx;
+    const betos = readyCard(ctx, member.id, 'TODO');
+    const target = { status: 'DOING', assigneeId: member.id, position: 'a0' };
+
+    const fromOther = await move(ctx, other, betos.id, target);
+    expect(fromOther.status).toBe(403);
+    expect(fromOther.body.error.code).toBe('FORBIDDEN');
+    // The assignee cannot hand their card to someone else either.
+    expect((await move(ctx, member, betos.id, { ...target, assigneeId: other.id })).status).toBe(403);
+    expect((await move(ctx, teacher, betos.id, target)).status).toBe(403);
+    expect(db.cards[0]?.status).toBe('TODO');
+    expect(db.cardEvents).toEqual([]);
+
+    const byModerator = await move(ctx, moderator, betos.id, { ...target, assigneeId: other.id });
+    expect(byModerator.status).toBe(200);
+    expect(byModerator.body).toMatchObject({ status: 'DOING', assigneeId: other.id });
+  });
+
+  it('hides the card from outsiders and other teachers (404 CARD_NOT_FOUND)', async () => {
+    const ctx = await setup();
+    const { db, team, outsider, otherTeacher } = ctx;
+    const card = db.addCard({ teamId: team.id, assigneeId: null, status: 'BACKLOG' });
+    const body = { status: 'BACKLOG', assigneeId: null, position: 'a0' };
+
+    const hidden = await move(ctx, outsider, card.id, body);
+    expect(hidden.status).toBe(404);
+    expect(hidden.body.error.code).toBe('CARD_NOT_FOUND');
+    expect((await move(ctx, otherTeacher, card.id, body)).status).toBe(404);
+    expect((await move(ctx, outsider, 'nosuchcard', body)).body).toEqual(hidden.body);
+  });
+
+  it('refuses incomplete cards, outside assignees and malformed positions (400) without writing', async () => {
+    const ctx = await setup();
+    const { db, team, member, moderator, outsider } = ctx;
+    const card = db.addCard({ teamId: team.id, assigneeId: null, status: 'BACKLOG' });
+
+    const incomplete = await move(ctx, member, card.id, { status: 'TODO', assigneeId: member.id, position: 'a0' });
+    expect(incomplete.status).toBe(400);
+    expect(incomplete.body.error.code).toBe('CARD_INCOMPLETE');
+
+    const complete = { position: 'a0', dueWeekday: 'MON', doneCriteria: 'x' };
+    const foreign = await move(ctx, moderator, card.id, { status: 'TODO', assigneeId: outsider.id, ...complete });
+    expect(foreign.status).toBe(400);
+    expect(foreign.body.error.code).toBe('NOT_A_TEAM_MEMBER');
+
+    const badPosition = await move(ctx, member, card.id, { status: 'BACKLOG', assigneeId: null, position: 'a00' });
+    expect(badPosition.status).toBe(400);
+    expect(badPosition.body.error.code).toBe('INVALID_POSITION');
+
+    const badStatus = await move(ctx, member, card.id, { status: 'LATER', assigneeId: null, position: 'a0' });
+    expect(badStatus.body.error.code).toBe('VALIDATION_ERROR');
+    expect(db.cards[0]).toMatchObject({ status: 'BACKLOG', assigneeId: null });
+    expect(db.cardEvents).toEqual([]);
+  });
+
+  it('rejects a stale expectedUpdatedAt (409 CARD_CONFLICT) without writing', async () => {
+    const ctx = await setup();
+    const { db, team, member } = ctx;
+    const card = db.addCard({ teamId: team.id, assigneeId: member.id, status: 'BACKLOG' });
+
+    const res = await move(ctx, member, card.id, {
+      status: 'BACKLOG',
+      assigneeId: null,
+      position: 'a0',
+      expectedUpdatedAt: '2026-10-19T14:00:00.000Z',
+    });
+
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe('CARD_CONFLICT');
+    expect(db.cards[0]?.assigneeId).toBe(member.id);
+    expect(db.cardEvents).toEqual([]);
+  });
+});

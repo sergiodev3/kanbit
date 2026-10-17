@@ -6,6 +6,7 @@ import { AppError } from './errors';
 export const forbidden = () => new AppError(403, 'FORBIDDEN', 'Not allowed');
 export const groupNotFound = () => new AppError(404, 'GROUP_NOT_FOUND', 'Group not found');
 export const teamNotFound = () => new AppError(404, 'TEAM_NOT_FOUND', 'Team not found');
+export const cardNotFound = () => new AppError(404, 'CARD_NOT_FOUND', 'Card not found');
 
 /** Only teachers pass (spec §3). Mount after `requireAuth`. */
 export const requireTeacher: RequestHandler = (req, _res, next) => {
@@ -47,14 +48,32 @@ export interface CardAccess {
   status: CardStatus;
 }
 
+/** The board cell a card is moved to. */
+export interface CardTarget {
+  assigneeId: string | null;
+  status: CardStatus;
+}
+
+/** A member's own card, or an unassigned Backlog card any member may take. */
+const ownsOrMayClaim = (user: SessionUser, card: CardAccess): boolean =>
+  card.assigneeId === user.id || (card.assigneeId === null && card.status === 'BACKLOG');
+
 /**
  * Who may edit or delete a card (spec §3): the moderator, the card's assignee, or any member while the card is
  * an unassigned Backlog card. The teacher is read-only.
  */
 export const canEditCard = (user: SessionUser, team: TeamAccess, card: CardAccess): boolean =>
+  isTeamModerator(user, team) || (isTeamMember(user, team) && ownsOrMayClaim(user, card));
+
+/**
+ * Who may move a card where (spec §3): the moderator moves any card to any row; a member moves the cards they
+ * may edit (their own, or an unassigned one they claim) only into their own row, or back to the unassigned
+ * Backlog. The teacher is read-only.
+ */
+export const canMoveCard = (user: SessionUser, team: TeamAccess, card: CardAccess, target: CardTarget): boolean =>
   isTeamModerator(user, team) ||
-  (isTeamMember(user, team) &&
-    (card.assigneeId === user.id || (card.assigneeId === null && card.status === 'BACKLOG')));
+  (canEditCard(user, team, card) &&
+    (target.assigneeId === user.id || (target.assigneeId === null && target.status === 'BACKLOG')));
 
 // Asserts: resources the user cannot see are reported as missing (404) so ids cannot be probed;
 // visible resources the user cannot act on are 403.
@@ -92,4 +111,16 @@ export function assertModeratorOrTeacher<T extends TeamAccess>(
 ): asserts team is T {
   assertTeamMemberOrTeacher(user, team, notFound);
   if (!canManageTeamProjects(user, team)) throw forbidden();
+}
+
+/** Moving a card: hidden from non-members (404 CARD_NOT_FOUND), 403 when `canMoveCard` refuses. */
+export function assertCanMoveCard<T extends TeamAccess>(
+  user: SessionUser,
+  team: T | null,
+  card: CardAccess,
+  target: CardTarget,
+  notFound: NotFound = cardNotFound,
+): asserts team is T {
+  assertTeamMemberOrTeacher(user, team, notFound);
+  if (!canMoveCard(user, team, card, target)) throw forbidden();
 }

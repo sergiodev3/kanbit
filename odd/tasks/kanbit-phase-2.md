@@ -42,8 +42,9 @@ Two students move their own cards; moving another student's card → 403.
 - [x] T1 Shared card DTOs + position helpers; API board read + card CRUD (idempotent create, PATCH 409, delete,
   events), memory-db, tests (~1000 forecast, ~1700 actual) — route: delegated — api 134, shared 37 (writer + parent
   spot check)
-- [ ] T2 API move: `canMoveCard`/`canEditCard`, `card.rules.ts`, `/move`, `releaseUnfinishedCards` events,
-  `phase2-flow` done-criterion test (~650) — route: delegated
+- [x] T2 API move: `canMoveCard`/`canEditCard`, `card.rules.ts`, `/move`, `releaseUnfinishedCards` events,
+  `phase2-flow` done-criterion test (~650 forecast, ~740 actual) — route: delegated — api 163, shared 37 (writer +
+  parent spot check); branch `feat/phase-2-card-move`
 - [ ] T3 Web board read + CRUD: board model, BoardPage, rows/columns, mobile tabs, CardDialog with "Mover a",
   mine filter, polling, offline write disable, teacher read-only route (~1000) — route: delegated
 - [ ] T4 Web drag & drop: dnd-kit grid, sensors, optimistic move with rollback, polling paused while dragging,
@@ -72,5 +73,20 @@ Two students move their own cards; moving another student's card → 403.
   sorted column → bytewise position → id). Errors: `TEAM_NOT_FOUND`, `CARD_NOT_FOUND` 404; `FORBIDDEN` 403;
   `ID_CONFLICT`, `CARD_CONFLICT`, `CARD_NOT_IN_BACKLOG` 409; `INVALID_PROJECT`, `CARD_INCOMPLETE` 400.
 
+- T1 committed 91bf122; RDD assessed medium (`slice_budget_reached`), user granted, reliability lens running.
+- T2 runs on the same branch (stacked) while the T1 review captures read the immutable T1 tree.
+
+- T1 RDD: reliability lens approved, acknowledged (burned); one suggestion (lock race untested). PR 1 #9 merged
+  (9dd74f2); production `GET /teams/:id/board` → 401 without session.
+- T2: 4 slices RED→GREEN; done-criterion test `phase2-flow` (two students move own cards 200; other's 403; moderator
+  200; teacher 403). Deviations accepted: `MoveCardRequest.position` is a plain string so the service returns
+  `INVALID_POSITION`; `planMove(card, target, {now, memberIds})`; any non-null target assignee must be a team member;
+  `releaseUnfinishedCards(…, actorId)` writes MOVED/ASSIGNED events authored by the teacher; move never checks
+  `validated` (Sat).
+- T2 move contract for T3/T4: `POST /cards/:id/move {status, assigneeId|null, position, dueWeekday?, doneCriteria?,
+  expectedUpdatedAt?}` → 200 CardResponse. Error order: VALIDATION_ERROR 400 → CARD_NOT_FOUND 404 → FORBIDDEN 403 →
+  CARD_CONFLICT 409 → INVALID_POSITION 400 → NOT_A_TEAM_MEMBER 400 → CARD_INCOMPLETE 400. Member: own card or claim an
+  unassigned BACKLOG card, target own row or `null`+BACKLOG; moderator any; teacher 403.
+
 ## Next step
-Commit T1, review, open PR 1, then T2.
+Commit T2, review, open PR 2, then T3.
