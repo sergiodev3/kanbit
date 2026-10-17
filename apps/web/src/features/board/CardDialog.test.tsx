@@ -4,7 +4,13 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import type { RouteObject } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createQueryClient } from '../../app/query-client';
-import { boardFixture, cardFixture, STUDENT_ID } from '../../test/board-fixtures';
+import {
+  boardFixture,
+  cardFixture,
+  MODERATOR_ID,
+  openSprintBoardFixture,
+  STUDENT_ID,
+} from '../../test/board-fixtures';
 import { errorResponse, jsonResponse, meFixture, mockApi, renderRoutes, requestBody } from '../../test/utils';
 import { buildRows, viewerOf } from './board-model';
 import { BoardPage } from './BoardPage';
@@ -277,5 +283,73 @@ describe('CardDialog: "Mover a"', () => {
     fireEvent.click(within(form).getByRole('button', { name: 'Mover' }));
 
     expect(await within(form).findByRole('alert')).toHaveTextContent(message);
+  });
+});
+
+describe('CardDialog: "Validar"', () => {
+  function renderCard(cardId: string, { viewerId = MODERATOR_ID, online = true } = {}) {
+    const board = openSprintBoardFixture();
+    const card = board.cards.find((candidate) => candidate.id === cardId);
+    if (!card) throw new Error('fixture');
+    const context: BoardContext = { board, rows: buildRows(board), viewer: viewerOf(board, viewerId), online };
+    const onClose = vi.fn();
+    render(
+      <QueryClientProvider client={createQueryClient()}>
+        <CardDialog context={context} card={card} onClose={onClose} />
+      </QueryClientProvider>,
+    );
+    return { onClose, dialog: screen.getByRole('dialog', { name: card.title }) };
+  }
+
+  it('lets the moderator validate a Por hacer card with expectedUpdatedAt', async () => {
+    const fetchMock = mockApi({
+      'POST /cards/cmine/validate': () => jsonResponse(200, cardFixture({ id: 'cmine', status: 'TODO', validated: true })),
+    });
+    const { dialog, onClose } = renderCard('cmine');
+
+    expect(within(dialog).getByText('Por validar')).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Validar' }));
+
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(requestBody(fetchMock, 'POST /cards/cmine/validate')).toEqual({ expectedUpdatedAt: STAMP });
+  });
+
+  it('shows a validated card as "Validada", without the button', () => {
+    const { dialog } = renderCard('cmod');
+
+    expect(within(dialog).getByText('Validada')).toBeInTheDocument();
+    expect(within(dialog).queryByRole('button', { name: 'Validar' })).not.toBeInTheDocument();
+  });
+
+  it('offers no validation for a Backlog card', () => {
+    const { dialog } = renderCard('cfree1');
+
+    expect(within(dialog).queryByRole('button', { name: 'Validar' })).not.toBeInTheDocument();
+    expect(within(dialog).queryByText('Por validar')).not.toBeInTheDocument();
+  });
+
+  it('is moderator-only: members see the state but cannot validate', () => {
+    const { dialog } = renderCard('cmine', { viewerId: STUDENT_ID });
+
+    expect(within(dialog).getByText('Por validar')).toBeInTheDocument();
+    expect(within(dialog).queryByRole('button', { name: 'Validar' })).not.toBeInTheDocument();
+  });
+
+  it('explains a card that already left Por hacer', async () => {
+    mockApi({ 'POST /cards/cmine/validate': () => errorResponse(409, 'CARD_NOT_IN_TODO') });
+    const { dialog, onClose } = renderCard('cmine');
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Validar' }));
+
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+      'Solo se pueden validar tarjetas que están en Por hacer.',
+    );
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('cannot validate while offline', () => {
+    const { dialog } = renderCard('cmine', { online: false });
+
+    expect(within(dialog).getByRole('button', { name: 'Validar' })).toBeDisabled();
   });
 });

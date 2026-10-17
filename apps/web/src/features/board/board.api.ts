@@ -27,9 +27,9 @@ export function useBoard(teamId: string, { paused = false }: { paused?: boolean 
 
 /**
  * Every card write refetches the board when it settles, success or failure: a 409 `CARD_CONFLICT` means the
- * board the user saw is stale, so the reload is what lets them retry on fresh data.
+ * board the user saw is stale, so the reload is what lets them retry on fresh data. Sprint writes reuse it.
  */
-function useBoardMutation<TVariables, TResult>(teamId: string, mutationFn: (variables: TVariables) => Promise<TResult>) {
+export function useBoardMutation<TVariables, TResult>(teamId: string, mutationFn: (variables: TVariables) => Promise<TResult>) {
   const client = useQueryClient();
   return useMutation({
     mutationFn,

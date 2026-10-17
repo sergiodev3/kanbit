@@ -1,10 +1,11 @@
-import type { BoardSprint, CardResponse } from '@kanbit/shared';
+import type { CardResponse } from '@kanbit/shared';
 import { useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { errorMessage } from '../../lib/error-messages';
 import { useOnlineStatus } from '../../shared/pwa/OfflineBanner';
 import { primaryButton } from '../../shared/ui/buttons';
 import { useIsNarrow } from '../../shared/ui/useIsNarrow';
 import { useMe } from '../auth/auth.api';
+import { SprintHeader } from '../sprint/SprintHeader';
 import { useBoard, useMoveCard } from './board.api';
 import type { DropDecision } from './board-dnd';
 import { BOARD_COLUMNS, buildRows, onlyRowOf, viewerOf, type BoardRow, type CardTarget } from './board-model';
@@ -92,7 +93,7 @@ export function BoardPage({ teamId, readOnly = false }: BoardPageProps) {
           {readOnly && <Badge>Solo lectura</Badge>}
           {viewer?.isModerator && <Badge>Eres moderador del equipo</Badge>}
         </div>
-        <SprintSummary sprint={data.sprint} />
+        <SprintHeader board={data} viewer={viewer} online={online} />
       </header>
 
       {canCreate && (
@@ -172,22 +173,6 @@ function Badge({ children }: { children: string }) {
     <span className="inline-block rounded-full bg-brand-50 px-3 py-1 text-sm font-semibold text-brand-700 ring-1 ring-brand-600">
       {children}
     </span>
-  );
-}
-
-const dayFormat = new Intl.DateTimeFormat('es-MX', { day: 'numeric', month: 'short', timeZone: 'UTC' });
-// Display only: a calendar date read as UTC midnight prints the same day in any zone.
-const formatDay = (isoDate: string): string => dayFormat.format(new Date(`${isoDate}T00:00:00Z`));
-
-function SprintSummary({ sprint }: { sprint: BoardSprint | null }) {
-  if (!sprint) return <p className="text-slate-600">Sin sprint abierto</p>;
-  return (
-    <div className="text-slate-700">
-      <p className="font-semibold">
-        Sprint {sprint.number} · {formatDay(sprint.startDate)} – {formatDay(sprint.endDate)}
-      </p>
-      {sprint.goal && <p className="text-sm">Meta: {sprint.goal}</p>}
-    </div>
   );
 }
 
