@@ -22,6 +22,9 @@ import { createHealthRouter } from './modules/health/health.routes';
 import { createPrismaProjectsRepository } from './modules/projects/projects.repository';
 import { createProjectsRouter } from './modules/projects/projects.routes';
 import { createProjectsService, type ProjectsService } from './modules/projects/projects.service';
+import { createPrismaSprintsRepository } from './modules/sprints/sprints.repository';
+import { createSprintsRouter } from './modules/sprints/sprints.routes';
+import { createSprintsService, type SprintsService } from './modules/sprints/sprints.service';
 import { createPrismaTeamsRepository } from './modules/teams/teams.repository';
 import { createTeamsRouter } from './modules/teams/teams.routes';
 import { createTeamsService, type TeamsService } from './modules/teams/teams.service';
@@ -36,6 +39,7 @@ export interface AppServices {
   teams: TeamsService;
   projects: ProjectsService;
   cards: CardsService;
+  sprints: SprintsService;
 }
 
 export interface AppDeps {
@@ -70,6 +74,9 @@ function resolveServices({ prisma, clock, services = {} }: AppDeps): AppServices
       createProjectsService({ repository: createPrismaProjectsRepository(requirePrisma('projects')) }),
     cards:
       services.cards ?? createCardsService({ repository: createPrismaCardsRepository(requirePrisma('cards')), clock }),
+    sprints:
+      services.sprints ??
+      createSprintsService({ repository: createPrismaSprintsRepository(requirePrisma('sprints')), clock }),
   };
 }
 
@@ -106,6 +113,7 @@ export function createApp(deps: AppDeps): Express {
   api.use(createTeamsRouter({ service: services.teams, requireAuth }));
   api.use(createProjectsRouter({ service: services.projects, requireAuth }));
   api.use(createCardsRouter({ service: services.cards, requireAuth }));
+  api.use(createSprintsRouter({ service: services.sprints, requireAuth }));
   app.use('/api/v1', api);
 
   app.use(notFoundHandler);

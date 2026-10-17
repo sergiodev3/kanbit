@@ -5,6 +5,7 @@ import { createAuthService } from '../../src/modules/auth/auth.service';
 import { createCardsService } from '../../src/modules/cards/cards.service';
 import { createGroupsService } from '../../src/modules/groups/groups.service';
 import { createProjectsService } from '../../src/modules/projects/projects.service';
+import { createSprintsService } from '../../src/modules/sprints/sprints.service';
 import { createTeamsService } from '../../src/modules/teams/teams.service';
 import { createUsersService } from '../../src/modules/users/users.service';
 import { MemoryDb } from './memory-db';
@@ -40,6 +41,7 @@ export function buildTestApp(options: TestAppOptions = {}) {
       teams: createTeamsService({ repository: db.teamsRepository }),
       projects: createProjectsService({ repository: db.projectsRepository }),
       cards: createCardsService({ repository: db.cardsRepository, clock }),
+      sprints: createSprintsService({ repository: db.sprintsRepository, clock }),
     },
   });
 

@@ -7,11 +7,13 @@ import {
   comparePositions,
   positionBetween,
 } from '@kanbit/shared';
+import { DEFAULT_TIME_ZONE } from '../../src/lib/clock';
 import type { AuthRepository, UserRecord } from '../../src/modules/auth/auth.service';
 import { releaseEvents } from '../../src/modules/cards/card.rules';
-import type { CardRecord, CardsRepository, NewCard, SprintRecord } from '../../src/modules/cards/cards.service';
+import type { CardRecord, CardsRepository, NewCard } from '../../src/modules/cards/cards.service';
 import type { GroupRecord, GroupsRepository } from '../../src/modules/groups/groups.service';
 import type { ProjectsRepository } from '../../src/modules/projects/projects.service';
+import type { SprintsRepository, TeamSprintRecord } from '../../src/modules/sprints/sprints.service';
 import type { TeamRecord, TeamsRepository } from '../../src/modules/teams/teams.service';
 import type { UsersRepository } from '../../src/modules/users/users.service';
 
@@ -48,9 +50,7 @@ interface ProjectRow {
 
 type CardRow = CardRecord;
 
-interface SprintRow extends SprintRecord {
-  teamId: string;
-}
+type SprintRow = TeamSprintRecord;
 
 interface CardEventRow {
   id: string;
@@ -76,6 +76,8 @@ export interface AddCardData {
   position?: string;
   validated?: boolean;
   validatedById?: string | null;
+  carriedOverCount?: number;
+  completedAt?: Date | null;
   createdById?: string;
 }
 
@@ -93,8 +95,12 @@ export class MemoryDb {
   readonly cards: CardRow[] = [];
   readonly cardEvents: CardEventRow[] = [];
   readonly sprints: SprintRow[] = [];
+  /** `Group.timezone`; groups not listed use the schema default. */
+  readonly groupTimezones = new Map<string, string>();
   /** Test hook: runs once right before the next card insert, as if a concurrent request inserted first. */
   raceNextCardCreate: ((card: NewCard) => void) | null = null;
+  /** Test hook: runs once right before the next sprint insert, as if a concurrent start inserted first. */
+  raceNextSprintCreate: (() => void) | null = null;
   private seq = 0;
 
   constructor(private readonly now: () => Date = () => new Date('2026-10-19T15:00:00Z')) {}
@@ -176,7 +182,14 @@ export class MemoryDb {
     return card;
   }
 
-  addSprint(data: { teamId: string; number?: number; status?: SprintStatus; goal?: string | null }): SprintRow {
+  addSprint(data: {
+    teamId: string;
+    number?: number;
+    status?: SprintStatus;
+    goal?: string | null;
+    startDate?: string;
+    endDate?: string;
+  }): SprintRow {
     const sprint: SprintRow = {
       id: `sprint${++this.seq}`,
       number: 1,
@@ -189,6 +202,10 @@ export class MemoryDb {
     };
     this.sprints.push(sprint);
     return sprint;
+  }
+
+  setGroupTimezone(groupId: string, timeZone: string): void {
+    this.groupTimezones.set(groupId, timeZone);
   }
 
   removeUser(id: string): void {
@@ -431,6 +448,60 @@ export class MemoryDb {
     addEvent: async (event) => {
       this.cardEvents.push({ id: `event${++this.seq}`, createdAt: this.now(), ...event });
     },
+  };
+
+  readonly sprintsRepository: SprintsRepository = {
+    transaction: (fn) => fn(this.sprintsRepository),
+    findTeam: async (teamId) => {
+      const team = this.teams.find((row) => row.id === teamId);
+      if (!team) return null;
+      return { ...this.teamRecord(team), timezone: this.groupTimezones.get(team.groupId) ?? DEFAULT_TIME_ZONE };
+    },
+    findSprint: async (sprintId) => {
+      const sprint = this.sprints.find((row) => row.id === sprintId);
+      return sprint ? { ...sprint } : null;
+    },
+    hasOpenSprint: async (teamId) => this.sprints.some((row) => row.teamId === teamId && row.status === 'OPEN'),
+    lastSprintNumber: async (teamId) => {
+      const numbers = this.sprints.filter((row) => row.teamId === teamId).map((row) => row.number);
+      return numbers.length > 0 ? Math.max(...numbers) : null;
+    },
+    createSprint: async (data) => {
+      const race = this.raceNextSprintCreate;
+      this.raceNextSprintCreate = null;
+      race?.();
+      // Mirrors the partial unique index (one OPEN sprint per team) and @@unique([teamId, number]).
+      const clash = this.sprints.some(
+        (row) => row.teamId === data.teamId && (row.status === 'OPEN' || row.number === data.number),
+      );
+      if (clash) throw uniqueViolation();
+      return { ...this.addSprint({ ...data, status: 'OPEN' }) };
+    },
+    adoptOrphanCards: async (teamId, sprintId, now) => {
+      for (const card of this.cards) {
+        if (card.teamId === teamId && card.sprintId === null && card.status !== 'BACKLOG') {
+          Object.assign(card, { sprintId, updatedAt: now });
+        }
+      }
+    },
+    closeSprint: async (sprintId, now) => {
+      const sprint = this.sprints.find((row) => row.id === sprintId && row.status === 'OPEN');
+      if (!sprint) return null;
+      Object.assign(sprint, { status: 'CLOSED', updatedAt: now });
+      return { ...sprint };
+    },
+    listUnfinishedCards: async (sprintId) =>
+      this.cards.filter((card) => card.sprintId === sprintId && card.status !== 'DONE').map((card) => ({ ...card })),
+    listCellPositions: (teamId, cell) => this.cardsRepository.listCellPositions(teamId, cell),
+    returnCardToBacklog: async (cardId, sprintId, version, changes) => {
+      const card = this.cards.find(
+        (row) => row.id === cardId && row.sprintId === sprintId && row.updatedAt.getTime() === version.getTime(),
+      );
+      if (!card) return false;
+      Object.assign(card, changes);
+      return true;
+    },
+    addEvent: (event) => this.cardsRepository.addEvent(event),
   };
 
   private lastPosition(teamId: string, assigneeId: string | null, status: CardStatus): string | null {

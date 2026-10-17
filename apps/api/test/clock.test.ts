@@ -47,4 +47,31 @@ describe('clock', () => {
       friday: '2026-10-23',
     });
   });
+
+  describe('sprintWeek (spec §7.2)', () => {
+    it('returns Monday–Friday of the current week on a weekday', () => {
+      // Wednesday 21 Oct 2026.
+      expect(at('2026-10-21T17:00:00Z').sprintWeek(MTY)).toEqual({ monday: '2026-10-19', friday: '2026-10-23' });
+      // Monday and Friday themselves.
+      expect(at('2026-10-19T15:00:00Z').sprintWeek(MTY)).toEqual({ monday: '2026-10-19', friday: '2026-10-23' });
+      expect(at('2026-10-23T18:00:00Z').sprintWeek(MTY)).toEqual({ monday: '2026-10-19', friday: '2026-10-23' });
+    });
+
+    it('returns the next week on Saturday and Sunday', () => {
+      expect(at('2026-10-24T18:00:00Z').sprintWeek(MTY)).toEqual({ monday: '2026-10-26', friday: '2026-10-30' });
+      expect(at('2026-10-25T18:00:00Z').sprintWeek(MTY)).toEqual({ monday: '2026-10-26', friday: '2026-10-30' });
+    });
+
+    it('decides the day in the group zone near midnight', () => {
+      // Saturday 02:00Z is still Friday evening in Monterrey: the current week.
+      expect(at('2026-10-24T02:00:00Z').sprintWeek(MTY)).toEqual({ monday: '2026-10-19', friday: '2026-10-23' });
+      expect(at('2026-10-24T02:00:00Z').sprintWeek('UTC')).toEqual({ monday: '2026-10-26', friday: '2026-10-30' });
+      // Monday 03:00Z is still Sunday in Monterrey: already the week that starts that Monday.
+      expect(at('2026-10-19T03:00:00Z').sprintWeek(MTY)).toEqual({ monday: '2026-10-19', friday: '2026-10-23' });
+    });
+
+    it('defaults to America/Monterrey', () => {
+      expect(at('2026-10-24T02:00:00Z').sprintWeek()).toEqual({ monday: '2026-10-19', friday: '2026-10-23' });
+    });
+  });
 });

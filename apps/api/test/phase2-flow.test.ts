@@ -44,6 +44,12 @@ describe('phase 2 done criterion (spec §12.1)', () => {
       .set('Cookie', ana.cookie)
       .send({ name: 'Kanbit' });
     expect(project.status).toBe(201);
+    // Phase 3: cards leave the Backlog only into an open sprint.
+    const sprint = await request(app)
+      .post(api(`/teams/${teamId}/sprints`))
+      .set('Cookie', ana.cookie)
+      .send({ goal: 'Primer sprint' });
+    expect(sprint.status).toBe(201);
 
     const createCard = async (student: Student, id: string, title: string) => {
       const res = await request(app)
@@ -58,6 +64,12 @@ describe('phase 2 done criterion (spec §12.1)', () => {
 
     const move = (cookie: string, cardId: string, body: object) =>
       request(app).post(api(`/cards/${cardId}/move`)).set('Cookie', cookie).send(body);
+    // Stands in for the moderator's validation (its endpoint arrives with phase 3 T2).
+    const validate = (cardId: string) => {
+      const card = db.cards.find((row) => row.id === cardId);
+      if (!card) throw new Error(`unknown card ${cardId}`);
+      Object.assign(card, { validated: true, validatedById: ana.id });
+    };
 
     // Each student takes their own card into their row ("Por hacer"), then starts it ("En marcha").
     for (const [student, cardId] of [
@@ -66,6 +78,7 @@ describe('phase 2 done criterion (spec §12.1)', () => {
     ] as const) {
       const todo = await move(student.cookie, cardId, { status: 'TODO', assigneeId: student.id, position: 'a0' });
       expect(todo.status).toBe(200);
+      validate(cardId);
       const doing = await move(student.cookie, cardId, { status: 'DOING', assigneeId: student.id, position: 'a0' });
       expect(doing.status).toBe(200);
     }

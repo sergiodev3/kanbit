@@ -6,6 +6,9 @@ import {
   assertTeamMemberOrTeacher,
   assertCanMoveCard,
   assertTeamTeacher,
+  assertTeamModerator,
+  assertCanCloseSprint,
+  canCloseSprint,
   canEditCard,
   canMoveCard,
   canManageTeamProjects,
@@ -177,6 +180,36 @@ describe('authorization asserts', () => {
     expect(outcome(() => assertModeratorOrTeacher(outsider, team, projectNotFound))).toEqual({
       status: 404,
       code: 'PROJECT_NOT_FOUND',
+    });
+  });
+});
+
+describe('sprint authorization (spec §3)', () => {
+  const sprintNotFound = () => new AppError(404, 'SPRINT_NOT_FOUND', 'Sprint not found');
+
+  it('lets only the moderator start a sprint: teacher and members 403, outsiders 404', () => {
+    expect(outcome(() => assertTeamModerator(moderator, team))).toBeNull();
+    expect(outcome(() => assertTeamModerator(teacher, team))).toEqual({ status: 403, code: 'FORBIDDEN' });
+    expect(outcome(() => assertTeamModerator(member, team))).toEqual({ status: 403, code: 'FORBIDDEN' });
+    expect(outcome(() => assertTeamModerator(outsider, team))).toEqual({ status: 404, code: 'TEAM_NOT_FOUND' });
+    expect(outcome(() => assertTeamModerator(otherTeacher, team))).toEqual({ status: 404, code: 'TEAM_NOT_FOUND' });
+    expect(outcome(() => assertTeamModerator(moderator, null))).toEqual({ status: 404, code: 'TEAM_NOT_FOUND' });
+  });
+
+  it('lets the moderator or the group teacher close a sprint', () => {
+    expect(canCloseSprint(moderator, team)).toBe(true);
+    expect(canCloseSprint(teacher, team)).toBe(true);
+    expect(canCloseSprint(member, team)).toBe(false);
+    expect(canCloseSprint(otherTeacher, team)).toBe(false);
+
+    expect(outcome(() => assertCanCloseSprint(teacher, team, sprintNotFound))).toBeNull();
+    expect(outcome(() => assertCanCloseSprint(member, team, sprintNotFound))).toEqual({
+      status: 403,
+      code: 'FORBIDDEN',
+    });
+    expect(outcome(() => assertCanCloseSprint(outsider, team, sprintNotFound))).toEqual({
+      status: 404,
+      code: 'SPRINT_NOT_FOUND',
     });
   });
 });

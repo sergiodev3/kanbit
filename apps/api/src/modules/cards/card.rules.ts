@@ -7,6 +7,10 @@ export const cardIncomplete = () =>
 export const notATeamMember = () => new AppError(400, 'NOT_A_TEAM_MEMBER', 'The assignee must be a member of the team');
 export const invalidPosition = () =>
   new AppError(400, 'INVALID_POSITION', 'The position is not a valid fractional index');
+export const noOpenSprint = () =>
+  new AppError(409, 'NO_OPEN_SPRINT', 'The team has no open sprint; start one before planning cards');
+export const cardNotValidated = () =>
+  new AppError(409, 'CARD_NOT_VALIDATED', 'The moderator must validate the card before it can start');
 
 /** Where a card goes (`POST /cards/:id/move`): its target cell, position and the details it may need there. */
 export interface MoveTarget {
@@ -21,6 +25,8 @@ export interface MoveContext {
   now: Date;
   /** User ids of the team members; any assignee must be one of them. */
   memberIds: readonly string[];
+  /** The team's OPEN sprint, or null when there is none. */
+  openSprintId: string | null;
 }
 
 /** Every card field a move rewrites. */
@@ -57,16 +63,23 @@ export function releaseEvents(status: CardStatus): MoveEvent[] {
   return status === 'BACKLOG' ? [assigned] : [{ type: 'MOVED', fromStatus: status, toStatus: 'BACKLOG' }, assigned];
 }
 
+const STARTED: ReadonlySet<CardStatus> = new Set(['DOING', 'DONE']);
+
 /**
  * Plans a card move (spec §6.1, §7.2, §9) without touching storage:
  * - outside the Backlog a card needs an assignee, a due weekday and done criteria (from the card or the request);
  * - any assignee must belong to the team;
- * - back to the Backlog drops the sprint and the validation (the assignee may stay);
- * - entering DONE stamps `completedAt`, leaving DONE clears it;
- * - otherwise `sprintId` is untouched (attaching a sprint belongs to the sprint cycle).
+ * - leaving the Backlog (or moving a card outside it that has no sprint) needs the team's open sprint and attaches
+ *   the card to it;
+ * - entering DOING or DONE needs the moderator's validation;
+ * - back to the Backlog drops the sprint and the validation (the assignee may stay); other moves keep both;
+ * - entering DONE stamps `completedAt`, leaving DONE clears it.
+ * Checks run in this order: malformed request (400 INVALID_POSITION, NOT_A_TEAM_MEMBER, CARD_INCOMPLETE), then
+ * board state (409 NO_OPEN_SPRINT, CARD_NOT_VALIDATED). The service checks permissions before calling this.
  * MOVED is recorded when the column changes and ASSIGNED when the row changes; a pure reorder records nothing.
  */
-export function planMove(card: CardRecord, target: MoveTarget, { now, memberIds }: MoveContext): MovePlan {
+export function planMove(card: CardRecord, target: MoveTarget, context: MoveContext): MovePlan {
+  const { now, memberIds, openSprintId } = context;
   if (!isValidPosition(target.position)) throw invalidPosition();
   if (target.assigneeId !== null && !memberIds.includes(target.assigneeId)) throw notATeamMember();
 
@@ -76,6 +89,15 @@ export function planMove(card: CardRecord, target: MoveTarget, { now, memberIds 
   if (!toBacklog && (target.assigneeId === null || doneCriteria === null || dueWeekday === null)) {
     throw cardIncomplete();
   }
+
+  let sprintId: string | null = null;
+  if (!toBacklog) {
+    const needsSprint = card.status === 'BACKLOG' || card.sprintId === null;
+    if (needsSprint && openSprintId === null) throw noOpenSprint();
+    sprintId = needsSprint ? openSprintId : card.sprintId;
+  }
+  const validated = !toBacklog && card.validated;
+  if (STARTED.has(target.status) && target.status !== card.status && !validated) throw cardNotValidated();
 
   let completedAt: Date | null = null;
   if (target.status === 'DONE') completedAt = card.status === 'DONE' ? (card.completedAt ?? now) : now;
@@ -93,8 +115,8 @@ export function planMove(card: CardRecord, target: MoveTarget, { now, memberIds 
       position: target.position,
       doneCriteria,
       dueWeekday,
-      sprintId: toBacklog ? null : card.sprintId,
-      validated: toBacklog ? false : card.validated,
+      sprintId,
+      validated,
       validatedById: toBacklog ? null : card.validatedById,
       completedAt,
     },
