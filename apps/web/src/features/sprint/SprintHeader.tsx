@@ -5,7 +5,13 @@ import { primaryButton, secondaryButton } from '../../shared/ui/buttons';
 import type { Viewer } from '../board/board-model';
 import { CloseSprintDialog } from './CloseSprintDialog';
 import { useValidateAll } from './sprint.api';
-import { formatSprintRange, pendingValidationCount, unfinishedCount } from './sprint-model';
+import {
+  type DeadlineLevel,
+  formatSprintRange,
+  pendingValidationCount,
+  sprintDeadlineNotice,
+  unfinishedCount,
+} from './sprint-model';
 import { StartSprintDialog } from './StartSprintDialog';
 
 export interface SprintHeaderProps {
@@ -15,7 +21,13 @@ export interface SprintHeaderProps {
   online: boolean;
 }
 
-const validatedNotice = (count: number): string =>
+const DEADLINE_STYLES: Record<DeadlineLevel, string> = {
+  info: 'bg-sky-50 text-sky-900 ring-sky-200',
+  warning: 'bg-amber-50 text-amber-900 ring-amber-200',
+  urgent: 'bg-red-50 text-red-900 ring-red-200',
+};
+
+const validatedNotice =(count: number): string =>
   count === 1 ? 'Se validó 1 tarjeta.' : `Se validaron ${count} tarjetas.`;
 
 /** The board header's sprint block (spec §8.2): number, dates and goal, plus the moderator's sprint actions (§8.3). */
@@ -42,6 +54,7 @@ export function SprintHeader({ board, viewer, online }: SprintHeaderProps) {
   }
 
   const pending = pendingValidationCount(board);
+  const deadline = sprintDeadlineNotice(board);
 
   return (
     <div className="space-y-2 text-slate-700">
@@ -51,6 +64,11 @@ export function SprintHeader({ board, viewer, online }: SprintHeaderProps) {
         </p>
         {sprint.goal && <p className="text-sm">Meta: {sprint.goal}</p>}
       </div>
+      {deadline && (
+        <p role="status" className={`rounded-lg p-3 text-sm ring-1 ${DEADLINE_STYLES[deadline.level]}`}>
+          {deadline.text}
+        </p>
+      )}
       {isModerator && (
         <>
           <div className="flex flex-wrap gap-2">

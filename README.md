@@ -130,6 +130,8 @@ Move errors: `400 VALIDATION_ERROR`, `404 CARD_NOT_FOUND`, `403 FORBIDDEN`, `409
 
 Backlog and Terminado cards never show a due state.
 
+**Deadline notice.** From Wednesday of the sprint week the header shows a banner to everyone, teacher included: "Quedan 3 días de sprint · N tarjetas sin terminar." (blue), the same with 2 days on Thursday (amber) and "Hoy cierra el sprint · N tarjetas sin terminar." on Friday (red). It uses the server's `today`, and disappears when every sprint card is done. There are no push notifications.
+
 **API endpoints** (prefix `/api/v1`):
 
 | Endpoint | Who |

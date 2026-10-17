@@ -34,3 +34,30 @@ export const pendingValidationCount = (board: BoardResponse): number =>
 /** Cards the close sends back to the Backlog: every unfinished card of the open sprint. */
 export const unfinishedCount = (board: BoardResponse): number =>
   board.cards.filter(inOpenSprint(board)).filter((card) => card.status !== 'DONE').length;
+
+export type DeadlineLevel = 'info' | 'warning' | 'urgent';
+
+export interface SprintDeadlineNotice {
+  level: DeadlineLevel;
+  text: string;
+}
+
+// School days left in the sprint week, today included, from Wednesday on.
+const DAYS_LEFT = { WED: 3, THU: 2, FRI: 1 } as const;
+const LEVEL: Record<keyof typeof DAYS_LEFT, DeadlineLevel> = { WED: 'info', THU: 'warning', FRI: 'urgent' };
+
+/**
+ * Reminder that the sprint is about to end, from Wednesday of the sprint week. It uses the server's "today" (spec
+ * §7.1) and says nothing when there is no open sprint, today is outside its week or every card is done.
+ */
+export function sprintDeadlineNotice(board: BoardResponse): SprintDeadlineNotice | null {
+  const { sprint, today } = board;
+  if (sprint === null || today.date < sprint.startDate || today.date > sprint.endDate) return null;
+  if (today.weekday !== 'WED' && today.weekday !== 'THU' && today.weekday !== 'FRI') return null;
+  const unfinished = unfinishedCount(board);
+  if (unfinished === 0) return null;
+  const left = DAYS_LEFT[today.weekday];
+  const lead = left === 1 ? 'Hoy cierra el sprint' : `Quedan ${left} días de sprint`;
+  const cards = unfinished === 1 ? '1 tarjeta sin terminar' : `${unfinished} tarjetas sin terminar`;
+  return { level: LEVEL[today.weekday], text: `${lead} · ${cards}.` };
+}
