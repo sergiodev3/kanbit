@@ -18,6 +18,8 @@ export function createMeetingsRouter({ service, requireAuth }: MeetingsRouterDep
   router.patch('/meetings/:id', requireAuth, controller.update);
   router.post('/meetings/:id/start', requireAuth, controller.start);
   router.post('/meetings/:id/end', requireAuth, controller.end);
+  router.put('/meetings/:id/checkins/me', requireAuth, controller.putMyCheckin);
+  router.patch('/meetings/:id/checkins/:userId', requireAuth, controller.captureCheckin);
 
   return router;
 }

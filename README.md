@@ -162,10 +162,12 @@ A meeting belongs to a sprint (and so to its team): one per sprint and day, of t
 |---|---|
 | `GET /teams/:id/meetings/today` → `{ suggestedType, date, meeting }` (`suggestedType` and `meeting` are `null` without an open sprint or on a weekend) | team member or teacher |
 | `POST /teams/:id/meetings` → `201` meeting of the suggested type (`409 NO_OPEN_SPRINT`, `409 NO_MEETING_TODAY`, `409 MEETING_ALREADY_EXISTS`) | moderator or teacher |
-| `GET /meetings/:id` → meeting (`404 MEETING_NOT_FOUND`) | team member or teacher |
+| `GET /meetings/:id` → meeting plus `checkins` (`404 MEETING_NOT_FOUND`) | team member or teacher |
 | `PATCH /meetings/:id` `{ notesMd?, agreements?, expectedUpdatedAt? }` → meeting (`409 MEETING_CONFLICT`) | moderator or teacher |
 | `POST /meetings/:id/start` → meeting (already started → `200`, no change; `409 MEETING_ENDED`) | moderator or teacher |
 | `POST /meetings/:id/end` → meeting with `durationSeconds` (already ended → `200`, no change; `409 MEETING_NOT_STARTED`) | moderator or teacher |
+| `PUT /meetings/:id/checkins/me` `{ id, did?, doing?, willDo?, blockers?, present?, expectedUpdatedAt? }` → check-in (`201` the first time, `200` after; `409 ID_CONFLICT`, `409 CHECKIN_CONFLICT`) | team member (moderator included); the teacher gets `403` |
+| `PATCH /meetings/:id/checkins/:userId` `{ did?, doing?, willDo?, blockers?, present?, expectedUpdatedAt? }` → check-in (`201` when created, `200` when updated; `400 NOT_A_TEAM_MEMBER`, `409 CHECKIN_CONFLICT`) | moderator |
 
 **Rules.**
 
@@ -173,6 +175,14 @@ A meeting belongs to a sprint (and so to its team): one per sprint and day, of t
 - Creating needs an open sprint, then a school day, then no meeting yet for the sprint and day; a concurrent create loses with `409 MEETING_ALREADY_EXISTS`. The creator is the facilitator when they are a team member (the teacher leaves it empty).
 - `startedAt` and `endedAt` come from the server clock; `durationSeconds` is the whole seconds between them. Repeating `start` or `end` is a no-op, so a retry keeps the first times.
 - Notes and agreements (up to 10000 characters each; blank text clears them) can be edited at any time, also after the meeting ended. `expectedUpdatedAt` guards against overwriting someone else's edit.
+
+**Check-ins** (spec §5.3). One per member and meeting; the response is `{ id, meetingId, userId, did, doing, willDo, blockers, present, capturedById, updatedAt }`.
+
+- A check-in can be saved whenever the meeting exists, before it starts and after it ended. Each text is trimmed, blank text is stored as `null`, and it holds up to 2000 characters. `present` defaults to `true`.
+- `PUT .../checkins/me` is an idempotent upsert on (meeting, user) with a client-generated cuid2 `id`. The first save creates the row with that id (`201`); later saves update the existing row, keeping its original id (`200`), and replace the whole content, so an omitted text is cleared. Saving the same content again is a `200` no-op that keeps `updatedAt`. An `id` that already belongs to another check-in answers `409 ID_CONFLICT`. A concurrent first save of the same member resolves to an update, never a `500`. A self-reported check-in has `capturedById: null`, also when it replaces one a moderator captured.
+- `PATCH .../checkins/:userId` is the moderator's plan B: `:userId` must be on the meeting's team (`400 NOT_A_TEAM_MEMBER`), the server generates the id when it creates the row, and only the fields sent change (`null` or blank clears a text). `capturedById` is the moderator, or `null` when they fill their own. A body with no text and no `present` is `400 VALIDATION_ERROR`.
+- `expectedUpdatedAt` is checked only against an existing check-in: a mismatch answers `409 CHECKIN_CONFLICT` and writes nothing.
+- Checks run in order: visibility (`404 MEETING_NOT_FOUND`), permission (`403`), target (`400`), then conflicts (`409`). `GET /meetings/:id` lists the check-ins in the team's row order (members no longer on the team come last, by user id); `GET /teams/:id/meetings/today` still returns the meeting without them.
 
 ## Scripts
 

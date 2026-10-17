@@ -33,7 +33,9 @@ agreements, and the projection mode with the 15-minute timer.
 - [x] T1 API meetings: shared DTOs + meeting-type rule, meetings module (today, create, get, patch notes/agreements,
   start, end with duration), tests, README (~600 forecast) — route: delegated — shared 54, api 248 (writer + parent
   spot check, mutation Math.floor→ceil caught); branch `feat/phase-4-meetings-api`
-- [ ] T2 API check-in: `PUT .../checkins/me` idempotent upsert, moderator capture with `capturedById`, tests, README
+- [x] T2 API check-in: `PUT .../checkins/me` idempotent upsert, moderator capture with `capturedById`, tests, README
+  (~700 forecast) — route: delegated — shared 61, api 278 (writer + parent spot check, mutation on `capturedById` caught by 4
+  tests); branch `feat/phase-4-checkins-api` stacked on T1
 - [ ] T3 Web meeting and check-in: `features/meetings`, suggestion of the day, check-in form, notes and agreements
 - [ ] T4 Web projection: timer (green / yellow from min 10 / red from min 14 / blink at 0), large check-ins with polling,
   compact board, Wake Lock, duration saved
@@ -59,5 +61,15 @@ agreements, and the projection mode with the 15-minute timer.
   updatedAt}; ports in `meetings.service.ts`; start/end idempotent. T2 must decide whether check-ins are allowed
   before start / after end.
 
+- PR 1 #19 opened (T1). Review of T1: reliability lens approved, no findings, acknowledged.
+- T2 decisions (user, Oct 17): check-ins may be saved before start and after end. Deviations accepted: PUT replaces the
+  whole content (omitted text cleared); a self-save over a moderator-captured row resets `capturedById` to null;
+  stale `expectedUpdatedAt` is checked before the no-op comparison; body validated before the 404 lookup; API tests
+  written in one batch (29/30 RED), not one behaviour at a time; P2002 retries the whole transaction once.
+- T2 contract for T3/T4: `GET /meetings/:id` → `MeetingDetailResponse` (meeting + `checkins[]` in team row order) is the
+  polling source for the projection; `PUT /meetings/:id/checkins/me` {id cuid2, did, doing, willDo, blockers, present?,
+  expectedUpdatedAt?} → 201 first save / 200 later; send all four texts each time; `PATCH /meetings/:id/checkins/:userId`
+  (moderator) sends only changed fields; codes `ID_CONFLICT`, `CHECKIN_CONFLICT`, `NOT_A_TEAM_MEMBER` need Spanish copy.
+
 ## Next step
-Open PR 1 (T1), then T2 (check-in API).
+Open PR 2 (T2) after PR 1 merges, then T3 (web meeting and check-in).

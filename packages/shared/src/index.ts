@@ -11,3 +11,4 @@ export * from './cards';
 export * from './sprints';
 export * from './card-state';
 export * from './meetings';
+export * from './checkins';
