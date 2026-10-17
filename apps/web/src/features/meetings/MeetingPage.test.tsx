@@ -119,6 +119,20 @@ describe('MeetingPage header', () => {
   });
 });
 
+describe('MeetingPage projection link', () => {
+  it.each([
+    ['moderator', '/team/meeting/projection'],
+    ['member', '/team/meeting/projection'],
+    ['teacher', '/teacher/teams/t1/meeting/projection'],
+  ] as const)('offers %s the projection at %s', async (viewer, href) => {
+    mockMeetingApi({ viewer });
+
+    renderRoutes(routes, ['/meeting']);
+
+    expect(await screen.findByRole('link', { name: 'Proyectar' })).toHaveAttribute('href', href);
+  });
+});
+
 describe('MeetingPage create, start and end', () => {
   it('lets the moderator create the day meeting, then shows it unstarted', async () => {
     const fetchMock = mockStatefulMeeting('moderator', null);

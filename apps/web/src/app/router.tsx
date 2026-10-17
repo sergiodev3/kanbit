@@ -5,6 +5,7 @@ import { ProfilePage } from '../features/auth/ProfilePage';
 import { RegisterPage } from '../features/auth/RegisterPage';
 import { RequireAuth } from '../features/auth/RequireAuth';
 import { HealthPage } from '../features/health/HealthPage';
+import { TeacherProjectionPage, TeamProjectionPage } from '../features/meetings/ProjectionRoutePages';
 import { TeacherMeetingPage } from '../features/meetings/TeacherMeetingPage';
 import { TeamMeetingPage } from '../features/meetings/TeamMeetingPage';
 import { GroupDetailPage } from '../features/teacher/GroupDetailPage';
@@ -38,6 +39,8 @@ export const routes: RouteObject[] = [
           { path: 'teacher/groups/:groupId', Component: GroupDetailPage },
           { path: 'teacher/teams/:teamId/board', Component: TeacherBoardPage, handle: wide },
           { path: 'teacher/teams/:teamId/meeting', Component: TeacherMeetingPage },
+          // The projection covers the app chrome itself (a fixed full-screen layer), so it needs no layout handle.
+          { path: 'teacher/teams/:teamId/meeting/projection', Component: TeacherProjectionPage },
         ],
       },
       {
@@ -45,6 +48,7 @@ export const routes: RouteObject[] = [
         children: [
           { path: 'team', Component: TeamHomePage, handle: wide },
           { path: 'team/meeting', Component: TeamMeetingPage },
+          { path: 'team/meeting/projection', Component: TeamProjectionPage },
         ],
       },
       { path: '*', element: <Navigate to="/" replace /> },

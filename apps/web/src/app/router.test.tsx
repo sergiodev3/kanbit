@@ -220,6 +220,42 @@ describe('app routes', () => {
     expect(screen.getByRole('link', { name: '← Volver al tablero' })).toHaveAttribute('href', '/teacher/teams/t1/board');
   });
 
+  it('opens the projection for a student on their own team, with a way back to the meeting', async () => {
+    mockMeetingApi({ viewer: 'member' });
+
+    renderRoutes(routes, ['/team/meeting/projection']);
+
+    expect(await screen.findByRole('timer')).toHaveTextContent('15:00');
+    expect(screen.getByRole('link', { name: 'Salir de proyección' })).toHaveAttribute('href', '/team/meeting');
+    expect(screen.getByRole('table', { name: 'Tablero del equipo' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Iniciar' })).not.toBeInTheDocument();
+  });
+
+  it('tells a student without a team that there is nothing to project', async () => {
+    mockApi({ 'GET /auth/me': () => jsonResponse(200, meFixture('STUDENT')) });
+
+    renderRoutes(routes, ['/team/meeting/projection']);
+
+    expect(await screen.findByText('Tu docente todavía no te asigna a un equipo.')).toBeInTheDocument();
+  });
+
+  it('opens the projection of a team for the teacher with the controls', async () => {
+    mockMeetingApi({ viewer: 'teacher' });
+
+    renderRoutes(routes, ['/teacher/teams/t1/meeting/projection']);
+
+    expect(await screen.findByRole('button', { name: 'Iniciar' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Salir de proyección' })).toHaveAttribute('href', '/teacher/teams/t1/meeting');
+  });
+
+  it('keeps students out of the teacher projection route', async () => {
+    mockApi({ 'GET /auth/me': () => jsonResponse(200, meFixture('STUDENT')) });
+
+    const { router } = renderRoutes(routes, ['/teacher/teams/t1/meeting/projection']);
+
+    await waitFor(() => expect(router.state.location.pathname).toBe('/team'));
+  });
+
   it('keeps students out of the teacher meeting route', async () => {
     mockApi({ 'GET /auth/me': () => jsonResponse(200, meFixture('STUDENT')) });
 

@@ -39,8 +39,9 @@ agreements, and the projection mode with the 15-minute timer.
 - [x] T3 Web meeting and check-in: `features/meetings`, suggestion of the day, check-in form, notes and agreements
   (~800 forecast) — route: delegated — web 306 tests (writer + parent spot check, mutation on check-in id reuse caught by 1
   test); branch `feat/phase-4-meetings-web` from main
-- [ ] T4 Web projection: timer (green / yellow from min 10 / red from min 14 / blink at 0), large check-ins with polling,
-  compact board, Wake Lock, duration saved
+- [x] T4 (code + README; deploy and device smoke pending) Web projection: timer (green / yellow from min 10 / red from min 14 /
+  blink at 0), large check-ins with polling, compact board, Wake Lock, duration saved (~550 forecast) — route: delegated —
+  web 386 tests (writer + parent spot check, mutation on the red threshold caught by 1 test); branch `feat/phase-4-projection`
 
 ## Checks
 - `pnpm -r typecheck`, per-package tests, `pnpm -r build` green.
@@ -89,5 +90,13 @@ agreements, and the projection mode with the 15-minute timer.
   `meetings.service.ts:260-267`). Possible fix later: re-base the own form when the polled detail brings a check-in
   the form did not have.
 
+- PR 3 #21 merged. T4 deviations accepted: no Zustand (useReducer; not installed); projection is a fixed full-screen
+  overlay (no RootLayout change); the countdown resumes after a reload from the device clock vs the server `startedAt`
+  (display only; a local pause/reset is lost on reload); board is a read-only table (max 3 titles per cell, "+N más");
+  `useCountdown` test written with the hook (no separate RED); two router tests were green before the routes (catch-all
+  redirect). Open question from the writer: with 5+ members the page scrolls, so the countdown and the check-ins are not
+  always visible together (side-by-side layout on wide screens if the device test shows it).
+
 ## Next step
-Open PR 3 (T3), then T4 (projection: timer, large check-ins, compact board, Wake Lock, duration saved).
+Open PR 4 (T4), then deploy and the production + device smoke (projector/phone: digit size, Wake Lock, blink, reload
+mid-meeting), then close Phase 4 (docs PR) and plan Phase 5 (teacher indicators + offline read).
