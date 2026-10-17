@@ -48,7 +48,7 @@ Two students move their own cards; moving another student's card → 403.
 - [x] T3 Web board read + CRUD: board model, BoardPage, rows/columns, mobile tabs, CardDialog with "Mover a",
   mine filter, polling, offline write disable, teacher read-only route (~1000 forecast, ~1980 actual, ~880 tests) —
   route: delegated — web 126 tests (writer + parent spot check); branch `feat/phase-2-web-board`
-- [x] T4 (code + README; deploy smoke pending) Web drag & drop: dnd-kit grid, sensors, optimistic move with
+- [x] T4 Web drag & drop: dnd-kit grid, sensors, optimistic move with
   rollback, polling paused while dragging, README, deploy + production smoke (~550) — route: delegated — web 148
   tests (writer + parent spot check); branch `feat/phase-2-board-dnd`
 
@@ -112,5 +112,21 @@ Two students move their own cards; moving another student's card → 403.
   jsdom (resolver covered by pure tests). Board route lazy-loaded: main chunk 489.67 kB (gzip 149 kB), board chunk
   95.25 kB; SW precaches 17 app-shell entries, `runtimeCaching` empty.
 
+- T4 committed b6867a5; RDD assessed medium, user granted, reliability lens approved, acknowledged. Advisories
+  (follow-ups): a failed first move's rollback can overwrite a second pending move until refetch; drop → page wiring
+  untested in jsdom. An accumulated T2+T3+T4 review (stop hook) was declined by the user for that candidate
+  (slices already reviewed).
+- PR 4 #12 merged (67ab2bd).
+- Production smoke (Oct 17, by the user): tested as teacher (read-only), moderator and student; moving own cards
+  works, moving another student's card is refused, the moderator moves any card — done criterion met.
+- Open follow-ups: concurrent-drag rollback; drop wiring tests; optimistic-lock race untested; `CardEvent` rows are
+  deleted with their card (cascade); slow web tests near Vitest's 5 s timeout under load.
+
+## Status
+Phase 2 done: two students move their own cards; moving another's → 403.
+
 ## Next step
-Commit T4, review, open PR 4, merge, deploy, and run the production smoke of the done criterion.
+Phase 3 (Sat 17, spec §12.1): sprint — start the week's sprint (goal), Backlog exit rules (attach to the open sprint),
+moderator validation (single + "validar todas"), no "En marcha" without validation, visual states (por validar /
+vence hoy / atrasada), simple close (unfinished cards back to Backlog keeping the assignee), tested with the
+injectable clock across Mon–Fri. Propose the file plan first (spec §14).
