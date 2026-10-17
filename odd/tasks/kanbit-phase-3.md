@@ -44,8 +44,10 @@ A Mon–Fri cycle simulated with the injectable `clock` passes the tests.
 - [x] T1 API sprint cycle: shared sprint DTOs, `clock.sprintWeek`, sprints module (start/close/adopt), `planMove` open
   sprint + validation gate, existing tests updated (~900 forecast, ~1250 actual) — route: delegated — api 197,
   shared 41 (writer + parent spot check)
-- [ ] T2 API validation + today: validate/validate-all, `assertTeamModerator`, `BoardResponse.today`, shared
-  `card-state`, Mon–Fri `phase3-flow` test (~650) — route: delegated
+- [x] T2 API validation + today: validate/validate-all, `assertTeamModerator`, `BoardResponse.today`, shared
+  `card-state`, Mon–Fri `phase3-flow` test (~650 forecast, ~700 actual) — route: delegated — api 209, shared 49;
+  the writer stopped at a web fixture outside its surface (`today` missing); the parent added it inline, then
+  typecheck/build/api tests green
 - [ ] T3 Web sprint controls: sprint.api, SprintHeader, start/close dialogs, Validar / Validar todas, messages (~800) —
   route: delegated
 - [ ] T4 Web states + gates: tile badges, "Mover a" and dnd gates, `applyMove` sprint/validation, README, deploy +
@@ -73,5 +75,15 @@ A Mon–Fri cycle simulated with the injectable `clock` passes the tests.
 - Deploy note: once T1 is live, the Phase 2 web can no longer move cards out of the Backlog until a sprint is started
   (UI arrives in T3), and the new codes show the generic message until T3. No real users before Monday.
 
+- T1 RDD: reliability lens approved (no findings), acknowledged. PR 1 #14 opened.
+- T2: slices RED→GREEN (`phase3-flow` written after the implementation; its behaviours went RED in `validation.test`).
+  DONE CRITERION: `phase3-flow` simulates Sat → Mon–Fri → next Mon with the injected clock and passes.
+  Deviations accepted: validate order 404 → 403 → already-validated no-op (200, before the stale check so offline
+  replays don't 409) → CARD_CONFLICT → CARD_NOT_IN_TODO; shared `ValidateCardRequest {expectedUpdatedAt?}` (body
+  optional); validate-all reuses `listBoardCards` with version-guarded updates (409 `CARD_CONFLICT` on races).
+- T2 contract for T3/T4: `POST /cards/:id/validate` → 200 CardResponse; `POST /teams/:id/cards/validate-all` → 200
+  `{validatedIds}`; `BoardResponse.today {date, weekday|null}`; shared `cardVisualState(card, sprint, today)` →
+  `{pendingValidation, due: 'TODAY'|'OVERDUE'|null}`, `WEEKDAY_ORDER`.
+
 ## Next step
-Commit T1, review, open PR 1, then T2.
+Commit T2, review, open PR 2, then T3.

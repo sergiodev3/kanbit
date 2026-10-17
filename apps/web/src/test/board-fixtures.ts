@@ -33,6 +33,7 @@ export function cardFixture(overrides: Partial<CardResponse> & Pick<CardResponse
 export function boardFixture(overrides: Partial<BoardResponse> = {}): BoardResponse {
   return {
     team: { id: 't1', name: 'Equipo Rojo', groupId: 'g1', moderatorId: MODERATOR_ID },
+    today: { date: '2026-10-16', weekday: 'FRI' },
     members: [
       { userId: STUDENT_ID, name: 'Luis Alumno', username: 'a001', isModerator: false, rowOrder: 1 },
       { userId: MODERATOR_ID, name: 'Ana López', username: 'a000', isModerator: true, rowOrder: 0 },

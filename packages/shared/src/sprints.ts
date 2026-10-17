@@ -20,3 +20,7 @@ export const CloseSprintResponse = z.object({
   returnedCardIds: z.array(cuid2Id),
 });
 export type CloseSprintResponse = z.infer<typeof CloseSprintResponse>;
+
+/** `POST /teams/:id/cards/validate-all`: the cards the moderator just validated, in board order. */
+export const ValidateAllResponse = z.object({ validatedIds: z.array(cuid2Id) });
+export type ValidateAllResponse = z.infer<typeof ValidateAllResponse>;

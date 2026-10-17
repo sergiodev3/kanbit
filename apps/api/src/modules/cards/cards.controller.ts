@@ -1,4 +1,4 @@
-import { CreateCardRequest, MoveCardRequest, UpdateCardRequest, cuid2Id } from '@kanbit/shared';
+import { CreateCardRequest, MoveCardRequest, UpdateCardRequest, ValidateCardRequest, cuid2Id } from '@kanbit/shared';
 import type { RequestHandler } from 'express';
 import { currentUser } from '../../http/auth';
 import type { CardsService } from './cards.service';
@@ -33,5 +33,15 @@ export function createCardsController(service: CardsService) {
     res.json(await service.move(currentUser(req), cardId, MoveCardRequest.parse(req.body)));
   };
 
-  return { board, create, get, update, remove, move };
+  const validate: RequestHandler = async (req, res) => {
+    const cardId = cuid2Id.parse(req.params.id);
+    // Express 5 leaves `req.body` undefined when the request has no body.
+    res.json(await service.validate(currentUser(req), cardId, ValidateCardRequest.parse(req.body ?? {})));
+  };
+
+  const validateAll: RequestHandler = async (req, res) => {
+    res.json(await service.validateAll(currentUser(req), cuid2Id.parse(req.params.id)));
+  };
+
+  return { board, create, get, update, remove, move, validate, validateAll };
 }

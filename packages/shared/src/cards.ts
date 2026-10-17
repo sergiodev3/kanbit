@@ -72,6 +72,12 @@ export const MoveCardRequest = z.object({
 });
 export type MoveCardRequest = z.infer<typeof MoveCardRequest>;
 
+/** `POST /cards/:id/validate` (moderator only); the body is optional. */
+export const ValidateCardRequest = z.object({
+  expectedUpdatedAt: isoTimestamp.optional(),
+});
+export type ValidateCardRequest = z.infer<typeof ValidateCardRequest>;
+
 export const CardResponse = z.object({
   id: cuid2Id,
   teamId: cuid2Id,
@@ -120,6 +126,16 @@ export const BoardTeam = z.object({
 export type BoardTeam = z.infer<typeof BoardTeam>;
 
 /**
+ * "Today" in the group's time zone, decided by the server (spec §7.1) so the client never trusts its own clock.
+ * `weekday` is null on Saturday and Sunday.
+ */
+export const BoardToday = z.object({
+  date: isoDate,
+  weekday: Weekday.nullable(),
+});
+export type BoardToday = z.infer<typeof BoardToday>;
+
+/**
  * `GET /teams/:id/board`. `members` are the rows, ordered by `rowOrder`; `sprint` is the open sprint or null;
  * `cards` are the backlog plus the open sprint's cards, sorted by column then bytewise position.
  */
@@ -129,5 +145,6 @@ export const BoardResponse = z.object({
   sprint: BoardSprint.nullable(),
   projects: z.array(ProjectResponse),
   cards: z.array(CardResponse),
+  today: BoardToday,
 });
 export type BoardResponse = z.infer<typeof BoardResponse>;
