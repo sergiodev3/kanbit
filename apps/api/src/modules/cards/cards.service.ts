@@ -20,6 +20,7 @@ import {
   assertTeamMemberOrTeacher,
   assertTeamModerator,
   canEditCard,
+  canEditCardContent,
   cardNotFound,
   forbidden,
   isTeamMember,
@@ -311,7 +312,10 @@ export function createCardsService({ repository, clock }: CardsServiceDeps): Car
 
     async update(actor, cardId, { expectedUpdatedAt, title, doneCriteria, dueWeekday, projectId }) {
       return repository.transaction(async (tx) => {
-        const { card } = await findEditable(tx, actor, cardId);
+        const { card, team } = await findEditable(tx, actor, cardId);
+        if (!canEditCardContent(actor, team, card)) {
+          throw new AppError(403, 'CARD_VALIDATED', 'Only the moderator can edit a validated card');
+        }
         if (isStale(card, expectedUpdatedAt)) throw cardConflict();
         // Spec §6.1: outside the Backlog a card must keep its done criteria and due weekday.
         if (card.status !== 'BACKLOG' && (doneCriteria === null || dueWeekday === null)) throw cardIncomplete();

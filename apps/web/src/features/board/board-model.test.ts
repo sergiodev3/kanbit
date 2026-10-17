@@ -13,6 +13,7 @@ import {
   BOARD_COLUMNS,
   buildRows,
   canEditCard,
+  canEditCardContent,
   canMoveCard,
   cellCards,
   moveTargetRows,
@@ -119,6 +120,15 @@ describe('permission mirror', () => {
     expect(canEditCard(student, card('cmod'))).toBe(false);
     expect(canEditCard(moderator, card('cother'))).toBe(true);
     expect(canEditCard(outsider, card('cfree1'))).toBe(false);
+  });
+
+  it('locks the content of a validated card for everyone but the moderator', () => {
+    const validated = { ...card('cmine'), validated: true };
+
+    expect(canEditCardContent(student, card('cmine'))).toBe(true);
+    expect(canEditCardContent(student, validated)).toBe(false);
+    expect(canEditCardContent(moderator, validated)).toBe(true);
+    expect(canEditCardContent(outsider, card('cfree1'))).toBe(false);
   });
 
   it('lets a member move into their own row or back to the unassigned backlog', () => {

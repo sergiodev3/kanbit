@@ -118,6 +118,8 @@ Move errors: `400 VALIDATION_ERROR`, `404 CARD_NOT_FOUND`, `403 FORBIDDEN`, `409
 - Leaving the Backlog needs an open sprint (`409 NO_OPEN_SPRINT`) and attaches the card to it. Without one, "Mover a" only offers the Backlog and explains why, and drops outside the Backlog are refused with a notice.
 - En marcha and Terminado need the moderator's validation (`409 CARD_NOT_VALIDATED`); "Mover a" hides them for unvalidated cards and says so.
 - Back to the Backlog clears the sprint and the validation; other moves and edits keep the validation.
+- A validated card's content (task, done criterion, estimated day, project) is the moderator's to change: its assignee gets `403 CARD_VALIDATED` on `PATCH` and sees it read-only, but keeps moving it. Back in the Backlog (validation cleared) the assignee edits it again.
+- In the card dialog "Guardar cambios" sits after "Mover a" and before "Eliminar".
 - The server decides "today" in the group's time zone (`today` on the board); the web never uses the device clock for dates.
 
 **Card states on the board** (spec §7.3), always shown as text, never by color alone:

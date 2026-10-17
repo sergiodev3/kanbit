@@ -105,6 +105,10 @@ export const canEditCard = (viewer: Viewer, card: CardResponse): boolean =>
   viewer.isModerator ||
   (viewer.isMember && (card.assigneeId === viewer.userId || (card.assigneeId === null && card.status === 'BACKLOG')));
 
+/** Mirrors the API: a validated card's content (title, criterion, day, project) is the moderator's to change. */
+export const canEditCardContent = (viewer: Viewer, card: CardResponse): boolean =>
+  viewer.isModerator || (canEditCard(viewer, card) && !card.validated);
+
 /** The moderator anywhere; a member moves editable cards into their own row or back to the unassigned Backlog. */
 export const canMoveCard = (viewer: Viewer, card: CardResponse, target: CardTarget): boolean =>
   viewer.isModerator ||

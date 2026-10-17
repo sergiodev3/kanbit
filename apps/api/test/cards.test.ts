@@ -362,6 +362,41 @@ describe('PATCH /cards/:id', () => {
     ]);
   });
 
+  describe('on a validated card', () => {
+    const validatedCard = (ctx: Awaited<ReturnType<typeof setup>>, assigneeId: string) =>
+      ctx.db.addCard({
+        teamId: ctx.team.id,
+        projectId: ctx.project.id,
+        assigneeId,
+        status: 'DOING',
+        dueWeekday: 'MON',
+        doneCriteria: 'Demo',
+        validated: true,
+        validatedById: ctx.moderator.id,
+      });
+
+    it('refuses its assignee: only the moderator edits what was validated (403 CARD_VALIDATED)', async () => {
+      const ctx = await setup();
+      const card = validatedCard(ctx, ctx.member.id);
+
+      const res = await patch(ctx, ctx.member, card.id, { title: 'Otro título', expectedUpdatedAt: NOW });
+
+      expect(res.status).toBe(403);
+      expect(res.body.error.code).toBe('CARD_VALIDATED');
+      expect(ctx.db.cardEvents).toEqual([]);
+    });
+
+    it('lets the moderator edit it and keeps the validation', async () => {
+      const ctx = await setup();
+      const card = validatedCard(ctx, ctx.member.id);
+
+      const res = await patch(ctx, ctx.moderator, card.id, { doneCriteria: 'Demo con datos', expectedUpdatedAt: NOW });
+
+      expect(res.status).toBe(200);
+      expect(res.body).toMatchObject({ doneCriteria: 'Demo con datos', validated: true });
+    });
+  });
+
   it('clears done criteria and due weekday in the backlog', async () => {
     const ctx = await setup();
     const { db, team, member } = ctx;

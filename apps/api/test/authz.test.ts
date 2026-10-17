@@ -10,6 +10,7 @@ import {
   assertCanCloseSprint,
   canCloseSprint,
   canEditCard,
+  canEditCardContent,
   canMoveCard,
   canManageTeamProjects,
   canViewTeam,
@@ -80,6 +81,16 @@ describe('authorization predicates', () => {
     expect(canEditCard(outsider, team, unassignedBacklog)).toBe(false);
     // An assignee who left the team keeps no rights over the card.
     expect(canEditCard(outsider, team, { assigneeId: 'carla', status: 'TODO' })).toBe(false);
+  });
+
+  it('locks the content of a validated card for everyone but the moderator', () => {
+    const betosDoing = { assigneeId: 'beto', status: 'DOING', validated: true } as const;
+    const betosTodo = { assigneeId: 'beto', status: 'TODO', validated: false } as const;
+
+    expect(canEditCardContent(moderator, team, betosDoing)).toBe(true);
+    expect(canEditCardContent(member, team, betosDoing)).toBe(false);
+    expect(canEditCardContent(member, team, betosTodo)).toBe(true);
+    expect(canEditCardContent(teacher, team, betosTodo)).toBe(false);
   });
 });
 

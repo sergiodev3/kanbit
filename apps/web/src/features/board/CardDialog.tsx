@@ -24,6 +24,7 @@ import {
   allowedStatuses,
   BOARD_COLUMNS,
   canEditCard,
+  canEditCardContent,
   cellCards,
   columnLabel,
   moveBlock,
@@ -260,6 +261,10 @@ export function CardDialog({ context, card, moveTarget, onClose }: CardDialogPro
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const deleteCard = useDeleteCard(board.team.id);
   const editable = viewer !== null && canEditCard(viewer, card);
+  const contentEditable = viewer !== null && canEditCardContent(viewer, card);
+  const saveFormId = useId();
+  // Owned here so the save button can sit after "Mover a", away from the fields it submits.
+  const updateCard = useUpdateCard(board.team.id);
   const projectName = board.projects.find((project) => project.id === card.projectId)?.name ?? '';
   const assigneeName = board.members.find((member) => member.userId === card.assigneeId)?.name ?? UNASSIGNED_LABEL;
   const validation = validationLabel(card);
@@ -296,16 +301,31 @@ export function CardDialog({ context, card, moveTarget, onClose }: CardDialogPro
         {editable ? (
           <>
             <OfflineNotice online={online} />
+            {!contentEditable && (
+              <>
+                <p className="text-sm text-slate-600">Solo el moderador puede editar una tarjeta validada.</p>
+                <CardDetails card={card} projectName={projectName} assigneeName={assigneeName} />
+              </>
+            )}
             {moveTarget ? (
               <>
                 <MoveCardForm context={context} card={card} initialTarget={moveTarget} onDone={onClose} />
-                <EditCardForm context={context} card={card} onDone={onClose} />
+                {contentEditable && (
+                  <EditCardForm formId={saveFormId} updateCard={updateCard} context={context} card={card} onDone={onClose} />
+                )}
               </>
             ) : (
               <>
-                <EditCardForm context={context} card={card} onDone={onClose} />
+                {contentEditable && (
+                  <EditCardForm formId={saveFormId} updateCard={updateCard} context={context} card={card} onDone={onClose} />
+                )}
                 <MoveCardForm context={context} card={card} onDone={onClose} />
               </>
+            )}
+            {contentEditable && (
+              <button type="submit" form={saveFormId} disabled={!online || updateCard.isPending} className={primaryButton}>
+                {updateCard.isPending ? 'Guardando…' : 'Guardar cambios'}
+              </button>
             )}
             {card.status === 'BACKLOG' && (
               <Section title="Eliminar">
@@ -392,10 +412,18 @@ function CardDetails({ card, projectName, assigneeName }: { card: CardResponse; 
   );
 }
 
-function EditCardForm({ context, card, onDone }: { context: BoardContext; card: CardResponse; onDone: () => void }) {
+interface EditCardFormProps {
+  /** Id of the form element: the dialog renders the submit button elsewhere and points it here. */
+  formId: string;
+  updateCard: ReturnType<typeof useUpdateCard>;
+  context: BoardContext;
+  card: CardResponse;
+  onDone: () => void;
+}
+
+function EditCardForm({ formId, updateCard, context, card, onDone }: EditCardFormProps) {
   const idPrefix = useId();
   const { board, online } = context;
-  const updateCard = useUpdateCard(board.team.id);
   const [values, setValues] = useState(() => valuesOf(card));
   const [errors, setErrors] = useState<FieldErrors<CardField>>({});
   const { base, awaitFresh } = useCardBase(card, (fresh) => setValues(valuesOf(fresh)));
@@ -422,14 +450,11 @@ function EditCardForm({ context, card, onDone }: { context: BoardContext; card: 
   ];
 
   return (
-    <form noValidate onSubmit={submit} aria-label="Editar tarjeta" className="space-y-3">
+    <form id={formId} noValidate onSubmit={submit} aria-label="Editar tarjeta" className="space-y-3">
       <ErrorSummary messages={summary} />
       <fieldset disabled={!online} className="space-y-3">
         <CardFields idPrefix={idPrefix} values={values} errors={errors} projects={board.projects} onChange={setValues} />
       </fieldset>
-      <button type="submit" disabled={!online || updateCard.isPending} className={primaryButton}>
-        {updateCard.isPending ? 'Guardando…' : 'Guardar cambios'}
-      </button>
     </form>
   );
 }

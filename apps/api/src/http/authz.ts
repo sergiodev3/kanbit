@@ -70,6 +70,16 @@ export const canEditCard = (user: SessionUser, team: TeamAccess, card: CardAcces
   isTeamModerator(user, team) || (isTeamMember(user, team) && ownsOrMayClaim(user, card));
 
 /**
+ * Who may change a card's content (title, done criteria, due day, project): whoever may edit it, except that a
+ * validated card is the moderator's to change, so the criteria the moderator approved cannot move under them.
+ */
+export const canEditCardContent = (
+  user: SessionUser,
+  team: TeamAccess,
+  card: CardAccess & { validated: boolean },
+): boolean => isTeamModerator(user, team) || (canEditCard(user, team, card) && !card.validated);
+
+/**
  * Who may move a card where (spec §3): the moderator moves any card to any row; a member moves the cards they
  * may edit (their own, or an unassigned one they claim) only into their own row, or back to the unassigned
  * Backlog. The teacher is read-only.
