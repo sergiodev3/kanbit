@@ -1,5 +1,6 @@
 import { TEAM_NAME_MAX_LENGTH, TeamName, type GroupStudent, type TeamResponse, type TeamSummary } from '@kanbit/shared';
 import { useState, type FormEvent } from 'react';
+import { Link } from 'react-router';
 import { errorMessage } from '../../lib/error-messages';
 import { cardClasses, ErrorSummary } from '../../shared/forms/FormParts';
 import { NameForm } from '../../shared/forms/NameForm';
@@ -53,6 +54,13 @@ export function TeamEditor({ groupId, team, students, teams }: TeamEditorProps) 
             {team.name}
           </h3>
           <div className="flex flex-wrap gap-2">
+            <Link
+              to={`/teacher/teams/${team.id}/board`}
+              aria-label={`Ver tablero de ${team.name}`}
+              className={primaryButton}
+            >
+              Ver tablero
+            </Link>
             <button type="button" onClick={() => setRenaming(true)} className={secondaryButton}>
               Cambiar nombre
             </button>

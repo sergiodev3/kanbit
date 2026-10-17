@@ -45,8 +45,9 @@ Two students move their own cards; moving another student's card → 403.
 - [x] T2 API move: `canMoveCard`/`canEditCard`, `card.rules.ts`, `/move`, `releaseUnfinishedCards` events,
   `phase2-flow` done-criterion test (~650 forecast, ~740 actual) — route: delegated — api 163, shared 37 (writer +
   parent spot check); branch `feat/phase-2-card-move`
-- [ ] T3 Web board read + CRUD: board model, BoardPage, rows/columns, mobile tabs, CardDialog with "Mover a",
-  mine filter, polling, offline write disable, teacher read-only route (~1000) — route: delegated
+- [x] T3 Web board read + CRUD: board model, BoardPage, rows/columns, mobile tabs, CardDialog with "Mover a",
+  mine filter, polling, offline write disable, teacher read-only route (~1000 forecast, ~1980 actual, ~880 tests) —
+  route: delegated — web 126 tests (writer + parent spot check); branch `feat/phase-2-web-board`
 - [ ] T4 Web drag & drop: dnd-kit grid, sensors, optimistic move with rollback, polling paused while dragging,
   README, deploy + production smoke (~550) — route: delegated
 
@@ -88,5 +89,18 @@ Two students move their own cards; moving another student's card → 403.
   CARD_CONFLICT 409 → INVALID_POSITION 400 → NOT_A_TEAM_MEMBER 400 → CARD_INCOMPLETE 400. Member: own card or claim an
   unassigned BACKLOG card, target own row or `null`+BACKLOG; moderator any; teacher 403.
 
+- T2 RDD: reliability lens approved, acknowledged (burned); one suggestion. PR 2 #10 merged (e169153); production
+  `POST /cards/:id/move` → 401 without session.
+- T3: slices RED→GREEN (ids test written after the code). Deviations accepted: on CARD_CONFLICT forms reset to the
+  reloaded card; "Sin asignar" row first (also holds cards of ex-members); mine filter shows only the viewer's row;
+  filter and "Nueva tarjeta" for members only (disabled without projects); phones open on the viewer's tab; route
+  `handle.wide` gives board pages `max-w-7xl`; projects mutations invalidate the `['teams', id]` prefix; moderator
+  badge moved to the board header. Build warning: main chunk 530 kB (> Vite 500 kB) — cuid2 pulls `bignumber.js` and
+  `@noble/hashes`; consider code-splitting later.
+- T3 notes for T4: wrap `BoardGrid`/`BoardTabs` in `DndContext`; `BoardCell` droppable keyed by (assigneeId, status);
+  sortable `<li>` around `CardTile`; use `canMoveCard`/`moveTargetRows`, `positionAt(cellCards(...), index, id)`,
+  `positionAtEnd`; `useMoveCard(teamId)` gets `onMutate`/`onError` optimistic rollback; pause polling while dragging;
+  drags out of BACKLOG on incomplete cards open `CardDialog`.
+
 ## Next step
-Commit T2, review, open PR 2, then T3.
+Commit T3, review, open PR 3, then T4.

@@ -49,6 +49,20 @@ export function requestBody(fetchMock: ReturnType<typeof mockApi>, key: string):
   return typeof body === 'string' ? (JSON.parse(body) as unknown) : undefined;
 }
 
+/** Stubs `window.matchMedia` so every query reports `matches`; undo with `vi.unstubAllGlobals()`. */
+export function stubMatchMedia(matches: boolean): void {
+  vi.stubGlobal('matchMedia', (query: string): MediaQueryList => ({
+    matches,
+    media: query,
+    onchange: null,
+    addEventListener: () => undefined,
+    removeEventListener: () => undefined,
+    addListener: () => undefined,
+    removeListener: () => undefined,
+    dispatchEvent: () => false,
+  }));
+}
+
 export function renderRoutes(routes: RouteObject[], initialEntries: InitialEntry[] = ['/']) {
   const client = createQueryClient();
   client.setDefaultOptions({ queries: { ...client.getDefaultOptions().queries, retry: false } });

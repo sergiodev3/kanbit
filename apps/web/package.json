@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@kanbit/shared": "workspace:*",
+    "@paralleldrive/cuid2": "^3.3.0",
     "@tanstack/react-query": "^5.104.2",
     "react": "~19.3.0",
     "react-dom": "~19.3.0",

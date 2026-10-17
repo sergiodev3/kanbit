@@ -19,6 +19,13 @@ const MESSAGES: Record<string, string> = {
   NOT_A_TEAM_MEMBER: 'El alumno no pertenece a este equipo.',
   TEAM_HAS_CARDS: 'No se puede eliminar un equipo que ya tiene tarjetas.',
   MEMBERS_CONFLICT: 'Alguien más modificó el equipo. Recarga e intenta de nuevo.',
+  CARD_NOT_FOUND: 'No se encontró la tarjeta. Es posible que la hayan eliminado.',
+  CARD_CONFLICT: 'La tarjeta cambió mientras la editabas; se recargó el tablero. Revisa e intenta de nuevo.',
+  ID_CONFLICT: 'No se pudo crear la tarjeta. Cierra el formulario e intenta de nuevo.',
+  CARD_NOT_IN_BACKLOG: 'Solo se pueden eliminar tarjetas que están en el Backlog.',
+  CARD_INCOMPLETE: 'Para salir del Backlog la tarjeta necesita responsable, día estimado y criterio de terminado.',
+  INVALID_POSITION: 'No se pudo calcular la posición de la tarjeta. Recarga el tablero e intenta de nuevo.',
+  INVALID_PROJECT: 'El proyecto elegido no pertenece a este equipo.',
 };
 
 const GENERIC_MESSAGE = 'Ocurrió un error inesperado. Intenta de nuevo.';

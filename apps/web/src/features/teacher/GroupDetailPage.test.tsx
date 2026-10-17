@@ -82,6 +82,18 @@ describe('GroupDetailPage', () => {
     expect(within(assigned).getByText('Equipo Rojo')).toBeInTheDocument();
   });
 
+  it('links each team to its read-only board', async () => {
+    mockApi(baseHandlers);
+
+    openPage();
+
+    const team = await screen.findByRole('article', { name: 'Equipo Rojo' });
+    expect(within(team).getByRole('link', { name: 'Ver tablero de Equipo Rojo' })).toHaveAttribute(
+      'href',
+      '/teacher/teams/t1/board',
+    );
+  });
+
   it('closes registration with the switch', async () => {
     const fetchMock = mockApi({
       ...baseHandlers,

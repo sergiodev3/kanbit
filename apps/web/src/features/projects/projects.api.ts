@@ -6,6 +6,9 @@ export const projectKeys = {
   team: (teamId: string) => ['teams', teamId, 'projects'] as const,
 };
 
+/** Prefix of every query of a team: project changes also refresh the board, which lists project names. */
+const teamQueries = (teamId: string) => ['teams', teamId] as const;
+
 export function useTeamProjects(teamId: string) {
   return useQuery({
     queryKey: projectKeys.team(teamId),
@@ -17,7 +20,7 @@ export function useCreateProject(teamId: string) {
   const client = useQueryClient();
   return useMutation({
     mutationFn: (body: CreateProjectRequest) => apiPost<ProjectResponse>(`/teams/${teamId}/projects`, body),
-    onSuccess: () => client.invalidateQueries({ queryKey: projectKeys.team(teamId) }),
+    onSuccess: () => client.invalidateQueries({ queryKey: teamQueries(teamId) }),
   });
 }
 
@@ -26,6 +29,6 @@ export function useRenameProject(teamId: string) {
   return useMutation({
     mutationFn: ({ projectId, name }: { projectId: string; name: string }) =>
       apiPatch<ProjectResponse>(`/projects/${projectId}`, { name }),
-    onSuccess: () => client.invalidateQueries({ queryKey: projectKeys.team(teamId) }),
+    onSuccess: () => client.invalidateQueries({ queryKey: teamQueries(teamId) }),
   });
 }
