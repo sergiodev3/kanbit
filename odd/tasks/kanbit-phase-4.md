@@ -82,5 +82,12 @@ agreements, and the projection mode with the 15-minute timer.
   `CHECKIN_QUESTIONS`, `formatDuration`, `formatMeetingDate`, `meetingTypeLabel`, read-only `CheckinList`;
   `mockMeetingApi` + `meeting-fixtures.ts`; routes `/team/meeting` and `/teacher/teams/:teamId/meeting`.
 
+- T3 RDD: reliability lens approved, acknowledged. One advisory WARNING left as follow-up (not a blocker): if the
+  moderator captures a member's check-in while that member's form (opened with no saved check-in) is still open, the
+  member's next save sends no `expectedUpdatedAt`, so the API updates the existing row (200, keeping its id) and silently
+  overwrites the captured content; the reviewer predicted `ID_CONFLICT`, which does not happen (verified in
+  `meetings.service.ts:260-267`). Possible fix later: re-base the own form when the polled detail brings a check-in
+  the form did not have.
+
 ## Next step
 Open PR 3 (T3), then T4 (projection: timer, large check-ins, compact board, Wake Lock, duration saved).
