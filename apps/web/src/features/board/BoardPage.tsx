@@ -1,13 +1,13 @@
-import type { CardResponse } from '@kanbit/shared';
+import { cardVisualState, type CardResponse } from '@kanbit/shared';
 import { useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
-import { errorMessage } from '../../lib/error-messages';
+import { codeMessage, errorMessage } from '../../lib/error-messages';
 import { useOnlineStatus } from '../../shared/pwa/OfflineBanner';
 import { primaryButton } from '../../shared/ui/buttons';
 import { useIsNarrow } from '../../shared/ui/useIsNarrow';
 import { useMe } from '../auth/auth.api';
 import { SprintHeader } from '../sprint/SprintHeader';
 import { useBoard, useMoveCard } from './board.api';
-import type { DropDecision } from './board-dnd';
+import type { DropDecision, DropRejection } from './board-dnd';
 import { BOARD_COLUMNS, buildRows, onlyRowOf, viewerOf, type BoardRow, type CardTarget } from './board-model';
 import { BoardCell, BoardDnd } from './BoardDnd';
 import { CardDialog, CreateCardDialog, type BoardContext } from './CardDialog';
@@ -21,7 +21,12 @@ export interface BoardPageProps {
 
 type OpenDialog = { kind: 'create' } | { kind: 'card'; cardId: string; moveTarget?: CardTarget } | null;
 
-const REJECTED_DROP = 'No puedes mover esta tarjeta a esa celda.';
+/** The notice for a drop the client refuses; the gates reuse the API's messages for the same rules. */
+const REJECTED_DROP: Record<DropRejection, string> = {
+  forbidden: 'No puedes mover esta tarjeta a esa celda.',
+  'no-sprint': codeMessage('NO_OPEN_SPRINT'),
+  'not-validated': codeMessage('CARD_NOT_VALIDATED'),
+};
 
 /** Spec §8.2 "Mi equipo / Tablero": rows per member plus "Sin asignar" × the four fixed columns. */
 export function BoardPage({ teamId, readOnly = false }: BoardPageProps) {
@@ -67,6 +72,8 @@ export function BoardPage({ teamId, readOnly = false }: BoardPageProps) {
       card={card}
       projectName={projectNames.get(card.projectId) ?? ''}
       assigneeName={card.assigneeId ? (memberNames.get(card.assigneeId) ?? null) : null}
+      // The server's "today" (spec §7.1), never the device clock.
+      visualState={cardVisualState(card, data.sprint, data.today)}
       {...(open ? { onOpen: () => setDialog({ kind: 'card', cardId: card.id }) } : {})}
     />
   );
@@ -80,7 +87,7 @@ export function BoardPage({ teamId, readOnly = false }: BoardPageProps) {
   };
 
   const onDecision = (decision: DropDecision) => {
-    if (decision.kind === 'rejected') setDropNotice(REJECTED_DROP);
+    if (decision.kind === 'rejected') setDropNotice(REJECTED_DROP[decision.reason]);
     if (decision.kind === 'dialog') setDialog({ kind: 'card', cardId: decision.cardId, moveTarget: decision.target });
     if (decision.kind === 'move') moveCard.mutate(decision.move);
   };

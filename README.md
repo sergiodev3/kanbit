@@ -102,6 +102,46 @@ Move errors: `400 VALIDATION_ERROR`, `404 CARD_NOT_FOUND`, `403 FORBIDDEN`, `409
 
 **Offline-ready writes** (spec §5.3.1). The client generates card ids (cuid2) and sends them in `POST`; repeating a `POST` with an existing id from the same author returns `200` with the existing card (another author gets `409 ID_CONFLICT`). `PATCH` and `move` accept an optional `expectedUpdatedAt` and answer `409 CARD_CONFLICT` when the card changed meanwhile; the web then reloads the board. Drag & drop moves are optimistic: the card moves at once and goes back, with a Spanish error message, if the server refuses.
 
+## Phase 3: sprint
+
+**Running the week (moderator).**
+
+1. **Start:** in the board header, "Iniciar sprint de la semana" asks for the week's goal. The sprint covers Monday to Friday of the current week in the group's time zone; started on a Saturday or Sunday, it covers the next week. Starting mid-week is allowed, and so is a new sprint in the same week after closing one.
+2. **Plan:** members take their Backlog cards into Por hacer (each needs an estimated day and a done criterion).
+3. **Validate:** the moderator checks each Por hacer card and presses "Validar" in its dialog, or "Validar todas" in the header for every pending card of the sprint. The moderator may validate their own cards.
+4. **Work:** validated cards move to En marcha and Terminado.
+5. **Close:** "Cerrar sprint" in the header sends every unfinished card back to the Backlog, keeping its assignee and dropping its validation; finished cards stay with the closed sprint and leave the board. (The API also lets the teacher close a sprint; the web offers it to the moderator.)
+
+**Rules** (spec §7.2, enforced by the API; the web mirrors them in "Mover a" and drag & drop):
+
+- One open sprint per team.
+- Leaving the Backlog needs an open sprint (`409 NO_OPEN_SPRINT`) and attaches the card to it. Without one, "Mover a" only offers the Backlog and explains why, and drops outside the Backlog are refused with a notice.
+- En marcha and Terminado need the moderator's validation (`409 CARD_NOT_VALIDATED`); "Mover a" hides them for unvalidated cards and says so.
+- Back to the Backlog clears the sprint and the validation; other moves and edits keep the validation.
+- The server decides "today" in the group's time zone (`today` on the board); the web never uses the device clock for dates.
+
+**Card states on the board** (spec §7.3), always shown as text, never by color alone:
+
+| State | When | Look |
+|---|---|---|
+| Por validar | In Por hacer and not validated yet | dashed border + label |
+| Vence hoy | Unfinished sprint card whose estimated day is today | amber label |
+| Atrasada | Unfinished sprint card whose estimated day has passed (or the sprint week is over) | red label |
+
+Backlog and Terminado cards never show a due state.
+
+**API endpoints** (prefix `/api/v1`):
+
+| Endpoint | Who |
+|---|---|
+| `POST /teams/:id/sprints` `{ goal }` → `201` sprint (`409 SPRINT_ALREADY_OPEN`) | moderator |
+| `POST /sprints/:id/close` → `{ sprint, returnedCardIds }` (`404 SPRINT_NOT_FOUND`, `409 SPRINT_CLOSED`) | moderator or teacher |
+| `POST /cards/:id/validate` `{ expectedUpdatedAt? }` → card (`409 CARD_NOT_IN_TODO`; already validated → `200`, no change) | moderator |
+| `POST /teams/:id/cards/validate-all` → `{ validatedIds }` (`409 NO_OPEN_SPRINT`) | moderator |
+| `GET /teams/:id/board` now includes `today: { date, weekday }` (`weekday` is `null` on weekends) | team member or teacher |
+
+Move errors gain `409 NO_OPEN_SPRINT` and `409 CARD_NOT_VALIDATED`, checked after the Phase 2 errors.
+
 ## Scripts
 
 Run from the repository root:

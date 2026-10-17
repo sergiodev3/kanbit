@@ -1,13 +1,46 @@
 import type { BoardResponse, CardResponse } from '@kanbit/shared';
 import { describe, expect, it } from 'vitest';
-import { boardFixture, cardFixture, MODERATOR_ID, OTHER_ID, STUDENT_ID } from '../../test/board-fixtures';
+import {
+  boardFixture,
+  cardFixture,
+  MODERATOR_ID,
+  openSprintBoardFixture,
+  OTHER_ID,
+  sprintFixture,
+  SPRINT_ID,
+  STUDENT_ID,
+} from '../../test/board-fixtures';
 import { applyMove, resolveDrop } from './board-dnd';
 import { viewerOf } from './board-model';
 
 const STAMP = '2026-10-16T15:00:00.000Z';
 
+/** The open-sprint board with every card outside the Backlog already validated, so only permissions matter. */
+const validatedBoard = (): BoardResponse => {
+  const board = openSprintBoardFixture();
+  return {
+    ...board,
+    cards: board.cards.map((card) =>
+      card.status === 'BACKLOG' ? card : { ...card, validated: true, validatedById: MODERATOR_ID },
+    ),
+  };
+};
+
+/** A validated sprint card of the student, ready to move anywhere in their row. */
+const sprintCard = (overrides: Parameters<typeof cardFixture>[0]) =>
+  cardFixture({
+    status: 'TODO',
+    assigneeId: STUDENT_ID,
+    sprintId: SPRINT_ID,
+    validated: true,
+    validatedById: MODERATOR_ID,
+    dueWeekday: 'MON',
+    doneCriteria: 'Listo',
+    ...overrides,
+  });
+
 describe('resolveDrop', () => {
-  const board = boardFixture();
+  const board = validatedBoard();
   const student = viewerOf(board, STUDENT_ID);
   const moderator = viewerOf(board, MODERATOR_ID);
 
@@ -37,10 +70,11 @@ describe('resolveDrop', () => {
 
   it('inserts before the card it is dropped on when coming from another cell', () => {
     const crowded = boardFixture({
+      sprint: sprintFixture(),
       cards: [
-        cardFixture({ id: 'cmine', status: 'TODO', assigneeId: STUDENT_ID, position: 'a0', dueWeekday: 'MON', doneCriteria: 'Listo' }),
-        cardFixture({ id: 'cdoing1', status: 'DOING', assigneeId: STUDENT_ID, position: 'a0', dueWeekday: 'MON', doneCriteria: 'Listo' }),
-        cardFixture({ id: 'cdoing2', status: 'DOING', assigneeId: STUDENT_ID, position: 'a1', dueWeekday: 'MON', doneCriteria: 'Listo' }),
+        sprintCard({ id: 'cmine', position: 'a0' }),
+        sprintCard({ id: 'cdoing1', status: 'DOING', position: 'a0' }),
+        sprintCard({ id: 'cdoing2', status: 'DOING', position: 'a1' }),
       ],
     });
 
@@ -62,21 +96,59 @@ describe('resolveDrop', () => {
   });
 
   it('rejects targets outside the permission mirror', () => {
-    expect(resolveDrop(board, student, 'cmine', { assigneeId: OTHER_ID, status: 'TODO', overCardId: null })).toEqual({
-      kind: 'rejected',
-    });
-    expect(resolveDrop(board, student, 'cother', { assigneeId: STUDENT_ID, status: 'TODO', overCardId: null })).toEqual({
-      kind: 'rejected',
-    });
-    expect(resolveDrop(board, null, 'cfree1', { assigneeId: null, status: 'BACKLOG', overCardId: 'cfree2' })).toEqual({
-      kind: 'rejected',
-    });
+    const forbidden = { kind: 'rejected', reason: 'forbidden' };
+    expect(resolveDrop(board, student, 'cmine', { assigneeId: OTHER_ID, status: 'TODO', overCardId: null })).toEqual(forbidden);
+    expect(resolveDrop(board, student, 'cother', { assigneeId: STUDENT_ID, status: 'TODO', overCardId: null })).toEqual(forbidden);
+    expect(resolveDrop(board, null, 'cfree1', { assigneeId: null, status: 'BACKLOG', overCardId: 'cfree2' })).toEqual(forbidden);
   });
 
   it('rejects the unassigned row outside the backlog, even for the moderator', () => {
     expect(resolveDrop(board, moderator, 'cother', { assigneeId: null, status: 'TODO', overCardId: null })).toEqual({
       kind: 'rejected',
+      reason: 'forbidden',
     });
+  });
+
+  it('rejects taking a card out of the backlog without an open sprint, before asking for missing fields', () => {
+    const noSprint = boardFixture();
+
+    expect(
+      resolveDrop(noSprint, viewerOf(noSprint, STUDENT_ID), 'cfree1', { assigneeId: STUDENT_ID, status: 'TODO', overCardId: null }),
+    ).toEqual({ kind: 'rejected', reason: 'no-sprint' });
+  });
+
+  it('rejects moving a card without a sprint to another column while none is open', () => {
+    const orphan = boardFixture({ cards: [sprintCard({ id: 'corphan', sprintId: null })] });
+    const viewer = viewerOf(orphan, STUDENT_ID);
+
+    expect(resolveDrop(orphan, viewer, 'corphan', { assigneeId: STUDENT_ID, status: 'DOING', overCardId: null })).toEqual({
+      kind: 'rejected',
+      reason: 'no-sprint',
+    });
+    // Dropping it back on its own place still changes nothing.
+    expect(resolveDrop(orphan, viewer, 'corphan', { assigneeId: STUDENT_ID, status: 'TODO', overCardId: null })).toEqual({
+      kind: 'none',
+    });
+  });
+
+  it('rejects En marcha and Terminado for a card the moderator has not validated, even for the moderator', () => {
+    const pending = openSprintBoardFixture();
+    const notValidated = { kind: 'rejected', reason: 'not-validated' };
+
+    expect(
+      resolveDrop(pending, viewerOf(pending, STUDENT_ID), 'cmine', { assigneeId: STUDENT_ID, status: 'DOING', overCardId: null }),
+    ).toEqual(notValidated);
+    expect(
+      resolveDrop(pending, viewerOf(pending, MODERATOR_ID), 'cother', { assigneeId: OTHER_ID, status: 'DONE', overCardId: null }),
+    ).toEqual(notValidated);
+  });
+
+  it('checks permissions before the sprint and validation gates', () => {
+    const pending = openSprintBoardFixture();
+
+    expect(
+      resolveDrop(pending, viewerOf(pending, STUDENT_ID), 'cother', { assigneeId: STUDENT_ID, status: 'DOING', overCardId: null }),
+    ).toEqual({ kind: 'rejected', reason: 'forbidden' });
   });
 
   it("lets the moderator move another member's card into any row", () => {
@@ -95,6 +167,7 @@ describe('resolveDrop', () => {
 
   it('moves a complete backlog card out of the backlog directly', () => {
     const ready = boardFixture({
+      sprint: sprintFixture(),
       cards: [cardFixture({ id: 'cready', assigneeId: STUDENT_ID, dueWeekday: 'FRI', doneCriteria: 'Demo lista' })],
     });
 
@@ -139,5 +212,46 @@ describe('applyMove', () => {
     const moved = applyMove(boardFixture(), { cardId: 'cmine', status: 'DOING', assigneeId: STUDENT_ID, position: 'a5' });
 
     expect(findCard(moved, 'cmine')).toMatchObject({ status: 'DOING', dueWeekday: 'TUE', doneCriteria: 'El usuario inicia sesión' });
+  });
+
+  it('attaches the open sprint to a card leaving the backlog, unvalidated', () => {
+    const moved = applyMove(openSprintBoardFixture(), {
+      cardId: 'cmineb',
+      status: 'TODO',
+      assigneeId: STUDENT_ID,
+      position: 'a5',
+      dueWeekday: 'WED',
+      doneCriteria: 'Pruebas verdes',
+    });
+
+    expect(findCard(moved, 'cmineb')).toMatchObject({ status: 'TODO', sprintId: SPRINT_ID, validated: false });
+  });
+
+  it('drops the sprint and the validation when a card goes back to the backlog, keeping its assignee', () => {
+    const moved = applyMove(openSprintBoardFixture(), {
+      cardId: 'cmod',
+      status: 'BACKLOG',
+      assigneeId: MODERATOR_ID,
+      position: 'a5',
+    });
+
+    expect(findCard(moved, 'cmod')).toMatchObject({
+      status: 'BACKLOG',
+      assigneeId: MODERATOR_ID,
+      sprintId: null,
+      validated: false,
+      validatedById: null,
+    });
+  });
+
+  it('keeps the sprint and the validation on moves between sprint columns', () => {
+    const moved = applyMove(openSprintBoardFixture(), { cardId: 'cmod', status: 'DONE', assigneeId: MODERATOR_ID, position: 'a5' });
+
+    expect(findCard(moved, 'cmod')).toMatchObject({
+      status: 'DONE',
+      sprintId: SPRINT_ID,
+      validated: true,
+      validatedById: MODERATOR_ID,
+    });
   });
 });

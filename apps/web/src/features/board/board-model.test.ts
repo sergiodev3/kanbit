@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { boardFixture, cardFixture, MODERATOR_ID, OTHER_ID, STUDENT_ID } from '../../test/board-fixtures';
 import {
+  boardFixture,
+  cardFixture,
+  MODERATOR_ID,
+  OTHER_ID,
+  sprintFixture,
+  SPRINT_ID,
+  STUDENT_ID,
+} from '../../test/board-fixtures';
+import {
+  allowedStatuses,
   BOARD_COLUMNS,
   buildRows,
   canEditCard,
@@ -139,6 +148,29 @@ describe('permission mirror', () => {
       OTHER_ID,
     ]);
     expect(moveTargetRows(student, card('cmod'), rows, 'TODO')).toEqual([]);
+  });
+});
+
+describe('allowedStatuses (sprint and validation gates)', () => {
+  const sprint = sprintFixture();
+  const backlog = cardFixture({ id: 'cb', assigneeId: STUDENT_ID });
+  const pending = cardFixture({ id: 'cp', status: 'TODO', sprintId: SPRINT_ID, assigneeId: STUDENT_ID });
+  const validated = { ...pending, id: 'cv', validated: true, validatedById: MODERATOR_ID };
+  const doingValidated = { ...validated, id: 'cd', status: 'DOING' as const };
+  const legacyDoing = cardFixture({ id: 'cl', status: 'DOING', sprintId: SPRINT_ID, assigneeId: STUDENT_ID });
+  const orphan = cardFixture({ id: 'co', status: 'TODO', sprintId: null, assigneeId: STUDENT_ID, validated: true });
+
+  it.each([
+    ['a Backlog card without an open sprint', backlog, null, ['BACKLOG']],
+    ['a Backlog card during a sprint (not validated yet)', backlog, sprint, ['BACKLOG', 'TODO']],
+    ['an unvalidated Por hacer card', pending, sprint, ['BACKLOG', 'TODO']],
+    ['a validated Por hacer card', validated, sprint, ['BACKLOG', 'TODO', 'DOING', 'DONE']],
+    ['a validated En marcha card', doingValidated, sprint, ['BACKLOG', 'TODO', 'DOING', 'DONE']],
+    ['an unvalidated card already in En marcha (it may stay there)', legacyDoing, sprint, ['BACKLOG', 'TODO', 'DOING']],
+    ['a card outside the Backlog with no sprint and none open', orphan, null, ['BACKLOG']],
+    ['a card outside the Backlog with no sprint while one is open', orphan, sprint, ['BACKLOG', 'TODO', 'DOING', 'DONE']],
+  ] as const)('%s', (_name, card, openSprint, expected) => {
+    expect(allowedStatuses(card, openSprint)).toEqual(expected);
   });
 });
 

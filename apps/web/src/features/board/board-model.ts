@@ -2,6 +2,7 @@ import {
   comparePositions,
   positionBetween,
   type BoardResponse,
+  type BoardSprint,
   type CardResponse,
   type CardStatus,
   type Weekday,
@@ -122,6 +123,31 @@ export const moveTargetRows = (
       (row.assigneeId !== null || status === 'BACKLOG') &&
       canMoveCard(viewer, card, { status, assigneeId: row.assigneeId }),
   );
+
+// Client mirror of the API move rules (spec §7.2.2–3, `planMove` in `apps/api/src/modules/cards/card.rules.ts`).
+
+/** Why a column is closed to a card: no open sprint to plan it into, or the moderator has not validated it. */
+export type MoveBlock = 'no-sprint' | 'not-validated';
+
+const STARTED_STATUSES: ReadonlySet<CardStatus> = new Set(['DOING', 'DONE']);
+
+/**
+ * Why `card` may not go to `status`, or null when it may. Outside the Backlog a card needs a sprint: its own, or the
+ * open one it gets attached to when it leaves the Backlog (or has none). Entering En marcha or Terminado needs the
+ * moderator's validation; a Backlog card never has it.
+ */
+export function moveBlock(card: CardResponse, sprint: BoardSprint | null, status: CardStatus): MoveBlock | null {
+  if (status === 'BACKLOG') return null;
+  const needsSprint = card.status === 'BACKLOG' || card.sprintId === null;
+  if (needsSprint && sprint === null) return 'no-sprint';
+  const validated = card.status !== 'BACKLOG' && card.validated;
+  if (STARTED_STATUSES.has(status) && status !== card.status && !validated) return 'not-validated';
+  return null;
+}
+
+/** Columns `card` may move to, in board order, given the open sprint (null when there is none). */
+export const allowedStatuses = (card: CardResponse, sprint: BoardSprint | null): CardStatus[] =>
+  BOARD_COLUMNS.filter((column) => moveBlock(card, sprint, column.status) === null).map((column) => column.status);
 
 /**
  * Position for inserting at `index` of a sorted cell. `movingId` is left out first, so a card moved within its

@@ -9,6 +9,7 @@ import {
   cardFixture,
   MODERATOR_ID,
   openSprintBoardFixture,
+  SPRINT_ID,
   STUDENT_ID,
 } from '../../test/board-fixtures';
 import { errorResponse, jsonResponse, meFixture, mockApi, renderRoutes, requestBody } from '../../test/utils';
@@ -43,6 +44,20 @@ async function openCard(title: string) {
 }
 
 const change = (element: HTMLElement, value: string) => fireEvent.change(element, { target: { value } });
+
+const optionLabels = (select: HTMLElement) => within(select).getAllByRole('option').map((option) => option.textContent);
+
+/** The open-sprint board with the student's Por hacer card (`cmine`) already validated by the moderator. */
+function validatedMineBoard(): BoardResponse {
+  const board = openSprintBoardFixture();
+  return {
+    ...board,
+    cards: board.cards.map((card) => (card.id === 'cmine' ? { ...card, validated: true, validatedById: MODERATOR_ID } : card)),
+  };
+}
+
+const SPRINT_HINT = 'Inicia un sprint para sacar tarjetas del Backlog.';
+const VALIDATION_HINT = 'El moderador debe validar la tarjeta para pasarla a En marcha.';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -169,8 +184,8 @@ describe('CardDialog: edit and delete', () => {
 
 describe('CardDialog: "Mover a"', () => {
   it('moves an own card to the end of the target cell', async () => {
-    const board = boardFixture();
-    board.cards.push(cardFixture({ id: 'cdoing', status: 'DOING', assigneeId: STUDENT_ID, position: 'a5' }));
+    const board = validatedMineBoard();
+    board.cards.push(cardFixture({ id: 'cdoing', status: 'DOING', assigneeId: STUDENT_ID, position: 'a5', sprintId: SPRINT_ID }));
     const fetchMock = setup({ 'POST /cards/cmine/move': () => jsonResponse(200, cardFixture({ id: 'cmine' })) }, board);
 
     const dialog = await openCard('Login con JWT');
@@ -192,7 +207,10 @@ describe('CardDialog: "Mover a"', () => {
   });
 
   it('requires the day and done criterion to take a card out of the backlog', async () => {
-    const fetchMock = setup({ 'POST /cards/cfree1/move': () => jsonResponse(200, cardFixture({ id: 'cfree1' })) });
+    const fetchMock = setup(
+      { 'POST /cards/cfree1/move': () => jsonResponse(200, cardFixture({ id: 'cfree1' })) },
+      openSprintBoardFixture(),
+    );
 
     const dialog = await openCard('Diseñar logo');
     const form = within(dialog).getByRole('form', { name: 'Mover a' });
@@ -238,7 +256,7 @@ describe('CardDialog: "Mover a"', () => {
 
   it('opens prefilled with a drag target and asks for the missing fields first', async () => {
     const fetchMock = mockApi({ 'POST /cards/cfree1/move': () => jsonResponse(200, cardFixture({ id: 'cfree1' })) });
-    const board = boardFixture();
+    const board = openSprintBoardFixture();
     const card = board.cards.find((candidate) => candidate.id === 'cfree1');
     if (!card) throw new Error('fixture');
     const context: BoardContext = { board, rows: buildRows(board), viewer: viewerOf(board, STUDENT_ID), online: true };
@@ -275,7 +293,7 @@ describe('CardDialog: "Mover a"', () => {
     ['CARD_INCOMPLETE', 400, 'Para salir del Backlog la tarjeta necesita responsable'],
     ['CARD_CONFLICT', 409, 'se recargó el tablero'],
   ])('shows the %s error in Spanish', async (code, status, message) => {
-    setup({ 'POST /cards/cmine/move': () => errorResponse(status, code) });
+    setup({ 'POST /cards/cmine/move': () => errorResponse(status, code) }, validatedMineBoard());
 
     const dialog = await openCard('Login con JWT');
     const form = within(dialog).getByRole('form', { name: 'Mover a' });
@@ -283,6 +301,52 @@ describe('CardDialog: "Mover a"', () => {
     fireEvent.click(within(form).getByRole('button', { name: 'Mover' }));
 
     expect(await within(form).findByRole('alert')).toHaveTextContent(message);
+  });
+
+  it('offers every column for a validated sprint card, without hints', async () => {
+    setup({}, validatedMineBoard());
+
+    const form = within(await openCard('Login con JWT')).getByRole('form', { name: 'Mover a' });
+
+    expect(optionLabels(within(form).getByLabelText('Columna'))).toEqual(['Backlog', 'Por hacer', 'En marcha', 'Terminado']);
+    expect(within(form).queryByText(SPRINT_HINT)).not.toBeInTheDocument();
+    expect(within(form).queryByText(VALIDATION_HINT)).not.toBeInTheDocument();
+  });
+
+  it('hides En marcha and Terminado until the moderator validates the card, and says why', async () => {
+    setup({}, openSprintBoardFixture());
+
+    const form = within(await openCard('Login con JWT')).getByRole('form', { name: 'Mover a' });
+
+    const columns = within(form).getByLabelText('Columna');
+    expect(optionLabels(columns)).toEqual(['Backlog', 'Por hacer']);
+    expect(columns).toHaveAccessibleDescription(VALIDATION_HINT);
+    expect(within(form).queryByText(SPRINT_HINT)).not.toBeInTheDocument();
+  });
+
+  it('keeps a backlog card in the backlog while no sprint is open, and says why', async () => {
+    setup();
+
+    const form = within(await openCard('Diseñar logo')).getByRole('form', { name: 'Mover a' });
+
+    const columns = within(form).getByLabelText('Columna');
+    expect(optionLabels(columns)).toEqual(['Backlog']);
+    expect(columns).toHaveAccessibleDescription(SPRINT_HINT);
+  });
+
+  it('only offers the backlog to a card outside it that has no sprint while none is open', async () => {
+    const fetchMock = setup({ 'POST /cards/cmine/move': () => jsonResponse(200, cardFixture({ id: 'cmine' })) });
+
+    const form = within(await openCard('Login con JWT')).getByRole('form', { name: 'Mover a' });
+
+    const columns = within(form).getByLabelText('Columna');
+    expect(optionLabels(columns)).toEqual(['Backlog']);
+    expect(columns).toHaveValue('BACKLOG');
+    expect(within(form).getByText(SPRINT_HINT)).toBeInTheDocument();
+
+    fireEvent.click(within(form).getByRole('button', { name: 'Mover' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(requestBody(fetchMock, 'POST /cards/cmine/move')).toMatchObject({ status: 'BACKLOG', assigneeId: STUDENT_ID });
   });
 });
 
