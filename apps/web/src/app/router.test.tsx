@@ -1,6 +1,7 @@
 import { onlineManager } from '@tanstack/react-query';
 import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { boardFixture } from '../test/board-fixtures';
 import { jsonResponse, meFixture, mockApi, renderRoutes, unauthenticated } from '../test/utils';
 import { ME_QUERY_KEY } from '../features/auth/auth.api';
 import { clearPendingLogout, hasPendingLogout } from '../features/auth/pending-logout';
@@ -163,6 +164,28 @@ describe('app routes', () => {
     mockApi({ 'GET /auth/me': () => jsonResponse(200, meFixture('STUDENT')) });
 
     const { router } = renderRoutes(routes, ['/teacher/groups/g1']);
+
+    await waitFor(() => expect(router.state.location.pathname).toBe('/team'));
+  });
+
+  it('opens a team board read-only for the teacher, with a way back to the group', async () => {
+    mockApi({
+      'GET /auth/me': () => jsonResponse(200, meFixture('TEACHER')),
+      'GET /teams/t1/board': () => jsonResponse(200, boardFixture()),
+    });
+
+    renderRoutes(routes, ['/teacher/teams/t1/board']);
+
+    expect(await screen.findByRole('heading', { level: 1, name: 'Equipo Rojo' })).toBeInTheDocument();
+    expect(screen.getByText('Solo lectura')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Nueva tarjeta' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '← Volver al grupo' })).toHaveAttribute('href', '/teacher/groups/g1');
+  });
+
+  it('keeps students out of the teacher board route', async () => {
+    mockApi({ 'GET /auth/me': () => jsonResponse(200, meFixture('STUDENT')) });
+
+    const { router } = renderRoutes(routes, ['/teacher/teams/t1/board']);
 
     await waitFor(() => expect(router.state.location.pathname).toBe('/team'));
   });

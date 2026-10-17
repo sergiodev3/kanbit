@@ -1,4 +1,4 @@
-import { Link, NavLink, Outlet, useNavigate } from 'react-router';
+import { Link, NavLink, Outlet, useMatches, useNavigate } from 'react-router';
 import { useLogout, useMe, usePendingLogoutRetry } from '../features/auth/auth.api';
 import { isApiError } from '../lib/api';
 import { InstallButton } from '../shared/pwa/InstallButton';
@@ -9,7 +9,16 @@ import { UpdatePrompt } from '../shared/pwa/UpdatePrompt';
 const headerButton =
   'rounded-lg px-3 py-1.5 text-sm font-semibold focus:outline-none focus-visible:ring-2 focus-visible:ring-white';
 
+/** Route `handle` read by the layout: `wide` pages (the board) get the full screen width. */
+export interface LayoutHandle {
+  wide?: boolean;
+}
+
+const isWide = (handle: unknown): boolean =>
+  typeof handle === 'object' && handle !== null && 'wide' in handle && handle.wide === true;
+
 export function RootLayout() {
+  const wide = useMatches().some((match) => isWide(match.handle));
   const me = useMe();
   const logout = useLogout();
   const navigate = useNavigate();
@@ -59,7 +68,7 @@ export function RootLayout() {
           conexión.
         </p>
       )}
-      <main className="mx-auto w-full max-w-xl flex-1 p-4">
+      <main className={`mx-auto w-full flex-1 p-4 ${wide ? 'max-w-7xl' : 'max-w-xl'}`}>
         <IosInstallGuide />
         <Outlet />
       </main>
