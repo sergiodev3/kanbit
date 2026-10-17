@@ -62,7 +62,7 @@ The teacher creates a group; two students register with the code and end up in a
   marker and retry `POST /auth/logout` on reconnect/app start before trusting `/auth/me` — route: delegated, after T4
   (same branch; no parallel writers) — web 74 tests (writer + parent spot check). Login/register also retry the
   pending logout first. Known edge: an in-flight retry finishing after a new login signs the new user out (fails safe).
-- [x] T4 (code + README part; deploy smoke pending) Web teacher panel, my-team placeholder, projects panel, README, deploy + production smoke test (~650) — route: delegated
+- [x] T4 Web teacher panel, my-team placeholder, projects panel, README, deploy + production smoke test (~650) — route: delegated
 
 ## Checks
 - `pnpm -r typecheck`, `pnpm -r test`, `pnpm -r build` green.
@@ -156,10 +156,23 @@ The teacher creates a group; two students register with the code and end up in a
 - T4 RDD: assessed medium (`slice_budget_reached`); user granted; reliability lens approved, acknowledged (burned).
 - T3c RDD: assessed high; user granted; approved, acknowledged (burned). PR 4 slice review (T4+T3c, stop hook, user
   granted): approved, acknowledged (burned).
-- Open advisories (follow-ups): saving a team is two non-atomic requests (PUT members then PATCH moderator); login
-  awaits the pending-logout retry with no timeout; an in-flight retry can revoke a just-issued session (fails safe);
-  the amber notice shows for any non-401 logout failure (also 5xx while online).
-- Slices: PR 4 = T4 (955e891) + T3c (d329111).
+- T3d (user-authorized from the PR 4 review): the pending-logout retry gives up after 5 s (aborts the request, keeps
+  the marker) so login/register never hang — commit b7328ee, RED→GREEN; RDD high, user granted, approved,
+  acknowledged. A full PR 4 review (stop hook, user granted) approved, acknowledged.
+- Web suite note: under machine load 2–3 teacher-panel tests exceed Vitest's 5 s default timeout in the full run
+  (also on the base without T3d, verified with `git stash`); they pass when run alone.
+- Open advisories (follow-ups): saving a team is two non-atomic requests (PUT members then PATCH moderator); an
+  in-flight retry can revoke a just-issued session (fails safe) and later callers inherit the first caller's timeout;
+  the amber notice shows for any non-401 logout failure (also 5xx while online); a failed code regeneration does not
+  resync the page.
+- Slices: PR 4 #7 = T4 (955e891) + T3c (d329111) + T3d (b7328ee); merged (2025000).
+- Production smoke (Oct 16, by the user on https://kanbit.app): the teacher created a group, two students registered
+  with the code, both were put in a team and one was made moderator — done criterion met. This was also the first run
+  of the Prisma repositories against Postgres.
+
+## Status
+Phase 1 done: the teacher creates a group; two students register with the code and end up in a team.
 
 ## Next step
-Open PR 4, merge, deploy, and run the production smoke of the done criterion.
+Phase 2 (Fri 16, spec §12.1): board — rows per member + "Sin asignar", 4 fixed columns, card CRUD, drag & drop with
+`@dnd-kit` and fractional ordering, move permissions in the API, mobile view. Propose the file plan first (spec §14).
