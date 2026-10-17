@@ -36,7 +36,9 @@ agreements, and the projection mode with the 15-minute timer.
 - [x] T2 API check-in: `PUT .../checkins/me` idempotent upsert, moderator capture with `capturedById`, tests, README
   (~700 forecast) — route: delegated — shared 61, api 278 (writer + parent spot check, mutation on `capturedById` caught by 4
   tests); branch `feat/phase-4-checkins-api` stacked on T1
-- [ ] T3 Web meeting and check-in: `features/meetings`, suggestion of the day, check-in form, notes and agreements
+- [x] T3 Web meeting and check-in: `features/meetings`, suggestion of the day, check-in form, notes and agreements
+  (~800 forecast) — route: delegated — web 306 tests (writer + parent spot check, mutation on check-in id reuse caught by 1
+  test); branch `feat/phase-4-meetings-web` from main
 - [ ] T4 Web projection: timer (green / yellow from min 10 / red from min 14 / blink at 0), large check-ins with polling,
   compact board, Wake Lock, duration saved
 
@@ -71,5 +73,21 @@ agreements, and the projection mode with the 15-minute timer.
   expectedUpdatedAt?} → 201 first save / 200 later; send all four texts each time; `PATCH /meetings/:id/checkins/:userId`
   (moderator) sends only changed fields; codes `ID_CONFLICT`, `CHECKIN_CONFLICT`, `NOT_A_TEAM_MEMBER` need Spanish copy.
 
+- PR 2 #20 merged. T3 deviations accepted: the "Reunión de hoy" link lives in `BoardPage` for both roles (teacher via
+  readOnly); page-level offline notice (the board's is private to CardDialog); `ID_CONFLICT` copy made generic because
+  check-ins reuse it; added `MEETING_ENDED` / `MEETING_NOT_STARTED` copy; not built: `present` toggle and check-ins of
+  people who left the team; RED observed per file or batch, not per assertion.
+- T3 contract for T4: `useTodayMeeting(teamId)`, `useMeetingDetail(meetingId|null)` (polls 10 s + focus/reconnect),
+  `useStartMeeting` / `useEndMeeting`, keys `meetingKeys`, `MEETING_REFETCH_INTERVAL_MS`; reusable `checkinRows`,
+  `CHECKIN_QUESTIONS`, `formatDuration`, `formatMeetingDate`, `meetingTypeLabel`, read-only `CheckinList`;
+  `mockMeetingApi` + `meeting-fixtures.ts`; routes `/team/meeting` and `/teacher/teams/:teamId/meeting`.
+
+- T3 RDD: reliability lens approved, acknowledged. One advisory WARNING left as follow-up (not a blocker): if the
+  moderator captures a member's check-in while that member's form (opened with no saved check-in) is still open, the
+  member's next save sends no `expectedUpdatedAt`, so the API updates the existing row (200, keeping its id) and silently
+  overwrites the captured content; the reviewer predicted `ID_CONFLICT`, which does not happen (verified in
+  `meetings.service.ts:260-267`). Possible fix later: re-base the own form when the polled detail brings a check-in
+  the form did not have.
+
 ## Next step
-Open PR 2 (T2) after PR 1 merges, then T3 (web meeting and check-in).
+Open PR 3 (T3), then T4 (projection: timer, large check-ins, compact board, Wake Lock, duration saved).
