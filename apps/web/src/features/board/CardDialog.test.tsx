@@ -1,10 +1,14 @@
 import { cuid2Id, type BoardResponse } from '@kanbit/shared';
-import { fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type { RouteObject } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { createQueryClient } from '../../app/query-client';
 import { boardFixture, cardFixture, STUDENT_ID } from '../../test/board-fixtures';
 import { errorResponse, jsonResponse, meFixture, mockApi, renderRoutes, requestBody } from '../../test/utils';
+import { buildRows, viewerOf } from './board-model';
 import { BoardPage } from './BoardPage';
+import { CardDialog, type BoardContext } from './CardDialog';
 
 const routes: RouteObject[] = [{ path: '/team', element: <BoardPage teamId="t1" /> }];
 const STAMP = '2026-10-16T15:00:00.000Z';
@@ -223,6 +227,40 @@ describe('CardDialog: "Mover a"', () => {
       assigneeId: null,
       position: 'a2',
       expectedUpdatedAt: STAMP,
+    });
+  });
+
+  it('opens prefilled with a drag target and asks for the missing fields first', async () => {
+    const fetchMock = mockApi({ 'POST /cards/cfree1/move': () => jsonResponse(200, cardFixture({ id: 'cfree1' })) });
+    const board = boardFixture();
+    const card = board.cards.find((candidate) => candidate.id === 'cfree1');
+    if (!card) throw new Error('fixture');
+    const context: BoardContext = { board, rows: buildRows(board), viewer: viewerOf(board, STUDENT_ID), online: true };
+    const onClose = vi.fn();
+
+    render(
+      <QueryClientProvider client={createQueryClient()}>
+        <CardDialog context={context} card={card} moveTarget={{ status: 'TODO', assigneeId: STUDENT_ID }} onClose={onClose} />
+      </QueryClientProvider>,
+    );
+
+    const form = screen.getByRole('form', { name: 'Mover a' });
+    expect(within(form).getByLabelText('Columna')).toHaveValue('TODO');
+    expect(within(form).getByLabelText('Fila')).toHaveValue(STUDENT_ID);
+    expect(within(form).getByText(/completa el día estimado y el criterio de terminado/)).toBeInTheDocument();
+    // The move section comes first, so the dialog's initial focus lands on it.
+    expect(within(form).getByLabelText('Columna')).toHaveFocus();
+
+    change(within(form).getByLabelText(/Día estimado/), 'MON');
+    change(within(form).getByLabelText(/Criterio de terminado/), 'Logo aprobado');
+    fireEvent.click(within(form).getByRole('button', { name: 'Mover' }));
+
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(requestBody(fetchMock, 'POST /cards/cfree1/move')).toMatchObject({
+      status: 'TODO',
+      assigneeId: STUDENT_ID,
+      dueWeekday: 'MON',
+      doneCriteria: 'Logo aprobado',
     });
   });
 

@@ -5,27 +5,35 @@ import { useOnlineStatus } from '../../shared/pwa/OfflineBanner';
 import { primaryButton } from '../../shared/ui/buttons';
 import { useIsNarrow } from '../../shared/ui/useIsNarrow';
 import { useMe } from '../auth/auth.api';
-import { useBoard } from './board.api';
-import { BOARD_COLUMNS, buildRows, onlyRowOf, viewerOf, type BoardRow } from './board-model';
+import { useBoard, useMoveCard } from './board.api';
+import type { DropDecision } from './board-dnd';
+import { BOARD_COLUMNS, buildRows, onlyRowOf, viewerOf, type BoardRow, type CardTarget } from './board-model';
+import { BoardCell, BoardDnd } from './BoardDnd';
 import { CardDialog, CreateCardDialog, type BoardContext } from './CardDialog';
 import { CardTile } from './CardTile';
 
-interface BoardPageProps {
+export interface BoardPageProps {
   teamId: string;
   /** The teacher's view (spec §8.5): no create, no filter, card details only. */
   readOnly?: boolean;
 }
 
-type OpenDialog = { kind: 'create' } | { kind: 'card'; cardId: string } | null;
+type OpenDialog = { kind: 'create' } | { kind: 'card'; cardId: string; moveTarget?: CardTarget } | null;
+
+const REJECTED_DROP = 'No puedes mover esta tarjeta a esa celda.';
 
 /** Spec §8.2 "Mi equipo / Tablero": rows per member plus "Sin asignar" × the four fixed columns. */
 export function BoardPage({ teamId, readOnly = false }: BoardPageProps) {
-  const board = useBoard(teamId);
+  const moveCard = useMoveCard(teamId);
+  const [dragging, setDragging] = useState(false);
+  // No polling while a card is in the air or its optimistic move is in flight.
+  const board = useBoard(teamId, { paused: dragging || moveCard.isPending });
   const me = useMe();
   const online = useOnlineStatus();
   const narrow = useIsNarrow();
   const [onlyMine, setOnlyMine] = useState(false);
   const [dialog, setDialog] = useState<OpenDialog>(null);
+  const [dropNotice, setDropNotice] = useState<string | null>(null);
   const data = board.data;
   const rows = useMemo(() => (data ? buildRows(data) : []), [data]);
 
@@ -53,14 +61,28 @@ export function BoardPage({ teamId, readOnly = false }: BoardPageProps) {
   const memberNames = new Map(data.members.map((member) => [member.userId, member.name]));
   const openCard = data.cards.find((card) => dialog?.kind === 'card' && card.id === dialog.cardId);
 
-  const tile = (card: CardResponse) => (
+  const tile = (card: CardResponse, open = true) => (
     <CardTile
       card={card}
       projectName={projectNames.get(card.projectId) ?? ''}
       assigneeName={card.assigneeId ? (memberNames.get(card.assigneeId) ?? null) : null}
-      onOpen={() => setDialog({ kind: 'card', cardId: card.id })}
+      {...(open ? { onOpen: () => setDialog({ kind: 'card', cardId: card.id }) } : {})}
     />
   );
+
+  const onDraggingChange = (isDragging: boolean) => {
+    setDragging(isDragging);
+    if (isDragging) {
+      setDropNotice(null);
+      moveCard.reset();
+    }
+  };
+
+  const onDecision = (decision: DropDecision) => {
+    if (decision.kind === 'rejected') setDropNotice(REJECTED_DROP);
+    if (decision.kind === 'dialog') setDialog({ kind: 'card', cardId: decision.cardId, moveTarget: decision.target });
+    if (decision.kind === 'move') moveCard.mutate(decision.move);
+  };
 
   return (
     <div className="space-y-4">
@@ -105,14 +127,42 @@ export function BoardPage({ teamId, readOnly = false }: BoardPageProps) {
         <p className="text-sm text-slate-600">Para crear tarjetas, el moderador debe agregar un proyecto.</p>
       )}
 
-      {narrow ? (
-        <BoardTabs rows={visibleRows} viewerId={viewer?.userId ?? null} renderCard={tile} />
-      ) : (
-        <BoardGrid rows={visibleRows} renderCard={tile} />
+      {moveCard.isError && (
+        <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-900 ring-1 ring-red-200">
+          {errorMessage(moveCard.error)}
+        </p>
+      )}
+      {dropNotice && (
+        <p role="status" className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900 ring-1 ring-amber-200">
+          {dropNotice}
+        </p>
       )}
 
+      <BoardDnd
+        board={data}
+        viewer={viewer}
+        enabled={viewer?.isMember === true && online}
+        renderPreview={(card) => tile(card, false)}
+        onDraggingChange={onDraggingChange}
+        onDecision={onDecision}
+      >
+        {narrow ? (
+          <BoardTabs rows={visibleRows} viewerId={viewer?.userId ?? null} renderCard={tile} />
+        ) : (
+          <BoardGrid rows={visibleRows} renderCard={tile} />
+        )}
+      </BoardDnd>
+
       {dialog?.kind === 'create' && <CreateCardDialog context={context} onClose={() => setDialog(null)} />}
-      {openCard && <CardDialog key={openCard.id} context={context} card={openCard} onClose={() => setDialog(null)} />}
+      {openCard && dialog?.kind === 'card' && (
+        <CardDialog
+          key={`${openCard.id}:${dialog.moveTarget?.status ?? ''}:${dialog.moveTarget?.assigneeId ?? ''}`}
+          context={context}
+          card={openCard}
+          {...(dialog.moveTarget ? { moveTarget: dialog.moveTarget } : {})}
+          onClose={() => setDialog(null)}
+        />
+      )}
     </div>
   );
 }
@@ -143,22 +193,6 @@ function SprintSummary({ sprint }: { sprint: BoardSprint | null }) {
 
 type RenderCard = (card: CardResponse) => ReactNode;
 
-function BoardCell({ label, cards, renderCard }: { label: string; cards: readonly CardResponse[]; renderCard: RenderCard }) {
-  return (
-    <div role="group" aria-label={label} className="h-full min-h-20 rounded-lg bg-slate-100 p-2">
-      {cards.length === 0 ? (
-        <p className="sr-only">Sin tarjetas</p>
-      ) : (
-        <ul className="space-y-2">
-          {cards.map((card) => (
-            <li key={card.id}>{renderCard(card)}</li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
-
 const cellLabel = (row: BoardRow, columnLabel: string) => `${row.label} · ${columnLabel}`;
 
 /** Desktop: the full rows × columns matrix, scrolling sideways when the screen is too narrow for it. */
@@ -188,7 +222,13 @@ function BoardGrid({ rows, renderCard }: { rows: readonly BoardRow[]; renderCard
             </div>
             {BOARD_COLUMNS.map((column) => (
               <div key={column.status} role="cell">
-                <BoardCell label={cellLabel(row, column.label)} cards={row.cells[column.status]} renderCard={renderCard} />
+                <BoardCell
+                  assigneeId={row.assigneeId}
+                  status={column.status}
+                  label={cellLabel(row, column.label)}
+                  cards={row.cells[column.status]}
+                  renderCard={renderCard}
+                />
               </div>
             ))}
           </div>
@@ -267,7 +307,13 @@ function BoardTabs({ rows, viewerId, renderCard }: BoardTabsProps) {
         {BOARD_COLUMNS.map((column) => (
           <section key={column.status} className="space-y-1">
             <h2 className="text-sm font-bold text-slate-800">{column.label}</h2>
-            <BoardCell label={cellLabel(current, column.label)} cards={current.cells[column.status]} renderCard={renderCard} />
+            <BoardCell
+              assigneeId={current.assigneeId}
+              status={column.status}
+              label={cellLabel(current, column.label)}
+              cards={current.cells[column.status]}
+              renderCard={renderCard}
+            />
           </section>
         ))}
       </div>

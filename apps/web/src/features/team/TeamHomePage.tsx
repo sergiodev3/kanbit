@@ -1,6 +1,6 @@
 import { cardClasses } from '../../shared/forms/FormParts';
 import { useMe } from '../auth/auth.api';
-import { BoardPage } from '../board/BoardPage';
+import { LazyBoardPage } from '../board/LazyBoardPage';
 import { ProjectsPanel } from '../projects/ProjectsPanel';
 
 /**
@@ -27,7 +27,7 @@ export function TeamHomePage() {
 
   return (
     <div className="space-y-6">
-      <BoardPage teamId={membership.teamId} />
+      <LazyBoardPage teamId={membership.teamId} />
       <div className={`${cardClasses} max-w-xl`}>
         <ProjectsPanel teamId={membership.teamId} canEdit={membership.isModerator} headingLevel={2} />
       </div>

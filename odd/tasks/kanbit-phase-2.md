@@ -48,8 +48,9 @@ Two students move their own cards; moving another student's card → 403.
 - [x] T3 Web board read + CRUD: board model, BoardPage, rows/columns, mobile tabs, CardDialog with "Mover a",
   mine filter, polling, offline write disable, teacher read-only route (~1000 forecast, ~1980 actual, ~880 tests) —
   route: delegated — web 126 tests (writer + parent spot check); branch `feat/phase-2-web-board`
-- [ ] T4 Web drag & drop: dnd-kit grid, sensors, optimistic move with rollback, polling paused while dragging,
-  README, deploy + production smoke (~550) — route: delegated
+- [x] T4 (code + README; deploy smoke pending) Web drag & drop: dnd-kit grid, sensors, optimistic move with
+  rollback, polling paused while dragging, README, deploy + production smoke (~550) — route: delegated — web 148
+  tests (writer + parent spot check); branch `feat/phase-2-board-dnd`
 
 ## Checks
 - `pnpm -r typecheck`, per-package tests, `pnpm -r build` green.
@@ -102,5 +103,14 @@ Two students move their own cards; moving another student's card → 403.
   `positionAtEnd`; `useMoveCard(teamId)` gets `onMutate`/`onError` optimistic rollback; pause polling while dragging;
   drags out of BACKLOG on incomplete cards open `CardDialog`.
 
+- T3 RDD: reliability lens approved (no findings), acknowledged. PR 3 #11 merged. A mid-T4 candidate (dnd-kit deps in
+  `package.json`/lockfile, stop hook, user granted) approved, acknowledged.
+- T4: pure `resolveDrop` (none/rejected/dialog/move) + `applyMove`; optimistic `useMoveCard` with rollback; polling
+  paused while dragging or a move is pending; Spanish announcements; keyboard drag via a separate "Arrastrar tarjeta"
+  handle (Enter/Space on the card opens the dialog). Deviations accepted: Mouse (distance 6) + Touch (200 ms delay,
+  tolerance 8) sensors instead of Pointer (keeps phone scrolling); no cross-cell reflow mid-drag; full drops untested in
+  jsdom (resolver covered by pure tests). Board route lazy-loaded: main chunk 489.67 kB (gzip 149 kB), board chunk
+  95.25 kB; SW precaches 17 app-shell entries, `runtimeCaching` empty.
+
 ## Next step
-Commit T3, review, open PR 3, then T4.
+Commit T4, review, open PR 4, merge, deploy, and run the production smoke of the done criterion.

@@ -1,7 +1,7 @@
 import { Link, useParams } from 'react-router';
 import { linkClasses } from '../../shared/forms/FormParts';
 import { useBoard } from '../board/board.api';
-import { BoardPage } from '../board/BoardPage';
+import { LazyBoardPage } from '../board/LazyBoardPage';
 
 /** Spec §8.5.5 / §12.1: the teacher opens any team's board read-only. */
 export function TeacherBoardPage() {
@@ -15,7 +15,7 @@ export function TeacherBoardPage() {
       <Link to={groupId ? `/teacher/groups/${groupId}` : '/teacher'} className={linkClasses}>
         {groupId ? '← Volver al grupo' : '← Mis grupos'}
       </Link>
-      <BoardPage teamId={teamId} readOnly />
+      <LazyBoardPage teamId={teamId} readOnly />
     </div>
   );
 }

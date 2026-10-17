@@ -65,6 +65,43 @@ Forgotten passwords: the teacher presses "Restablecer contraseña" next to the s
 
 `PUT /teams/:id/members` replaces the whole member set (array order is the board row order) and moves students out of their previous team. A team that already has cards cannot be deleted (`409 TEAM_HAS_CARDS`).
 
+## Phase 2: board
+
+**Using the board.** "Mi equipo" shows one row per member plus "Sin asignar" (first), and the four columns Backlog, Por hacer, En marcha and Terminado. "Nueva tarjeta" always creates the card in the unassigned Backlog. To move a card:
+
+- **Mouse / touch:** drag the card (on phones, press and hold briefly). Clicking or tapping it opens its details instead.
+- **Keyboard:** Tab to the card's "Arrastrar tarjeta" handle, press Space or Enter to pick it up, use the arrow keys to choose the cell and position, then Space or Enter to drop it (Escape cancels). Moves are announced in Spanish to screen readers.
+- **"Mover a":** open the card and pick the column and row in its "Mover a" section; the card goes to the end of that cell. This is the main path on phones, where the board shows one row per tab.
+
+Taking a card out of the Backlog needs a responsible member, an estimated day and a done criterion; dragging an incomplete card out opens "Mover a" prefilled with the target so you can fill them in. Only the cards you may move have a handle, and drops you are not allowed to make send nothing. "Solo mis tarjetas" shows only your row. The board refreshes every 10 seconds (paused while you drag) and when the window regains focus; offline, the board is read-only. The teacher opens a team's board from the group page, read-only.
+
+**Move permissions** (spec §3, enforced by the API; the web only mirrors them):
+
+| Who | Can move / edit |
+|---|---|
+| Member | Their own cards, into their own row or back to the unassigned Backlog; they can also take an unassigned Backlog card into their row |
+| Moderator | Any card of the team, into any row |
+| Teacher | Nothing (read-only, `403 FORBIDDEN`) |
+| Anyone else | `404` |
+
+Cards can only be deleted while in the Backlog (`409 CARD_NOT_IN_BACKLOG`). Moving to Terminado sets `completedAt`; leaving it clears it.
+
+**API endpoints** (prefix `/api/v1`):
+
+| Endpoint | Who |
+|---|---|
+| `GET /teams/:id/board` → team, members (rows), open sprint or `null`, projects, cards | team member or teacher |
+| `POST /teams/:id/cards` | team member |
+| `GET /cards/:id` | team member or teacher |
+| `PATCH /cards/:id`, `DELETE /cards/:id` | see move permissions |
+| `POST /cards/:id/move` `{ status, assigneeId, position, dueWeekday?, doneCriteria?, expectedUpdatedAt? }` | see move permissions |
+
+Move errors: `400 VALIDATION_ERROR`, `404 CARD_NOT_FOUND`, `403 FORBIDDEN`, `409 CARD_CONFLICT`, `400 INVALID_POSITION`, `400 NOT_A_TEAM_MEMBER`, `400 CARD_INCOMPLETE`. Every create, edit and move writes a `CardEvent` (`CREATED`, `EDITED`, `MOVED`, `ASSIGNED`); a pure reorder writes none.
+
+**Ordering.** `Card.position` is a fractional index (`fractional-indexing`, base 62): the client computes a key between the neighbours of the drop position, so a move updates only one row. Positions are compared bytewise (`ORDER BY position COLLATE "C"`, plain JS `<`), never with locale-aware collation, with the card id as tie-break.
+
+**Offline-ready writes** (spec §5.3.1). The client generates card ids (cuid2) and sends them in `POST`; repeating a `POST` with an existing id from the same author returns `200` with the existing card (another author gets `409 ID_CONFLICT`). `PATCH` and `move` accept an optional `expectedUpdatedAt` and answer `409 CARD_CONFLICT` when the card changed meanwhile; the web then reloads the board. Drag & drop moves are optimistic: the card moves at once and goes back, with a Spanish error message, if the server refuses.
+
 ## Scripts
 
 Run from the repository root:
