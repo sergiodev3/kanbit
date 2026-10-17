@@ -21,10 +21,12 @@ import { ConfirmDialog, Dialog } from '../../shared/ui/Dialog';
 import { useValidateCard } from '../sprint/sprint.api';
 import { useCreateCard, useDeleteCard, useMoveCard, useUpdateCard } from './board.api';
 import {
+  allowedStatuses,
   BOARD_COLUMNS,
   canEditCard,
   cellCards,
   columnLabel,
+  moveBlock,
   moveTargetRows,
   positionAtEnd,
   UNASSIGNED_LABEL,
@@ -32,6 +34,7 @@ import {
   WEEKDAY_LABELS,
   type BoardRow,
   type CardTarget,
+  type MoveBlock,
   type Viewer,
 } from './board-model';
 
@@ -431,6 +434,12 @@ function EditCardForm({ context, card, onDone }: { context: BoardContext; card: 
   );
 }
 
+/** Why some columns are missing from "Mover a" (spec §7.2.2–3). */
+const MOVE_BLOCK_HINTS: Record<MoveBlock, string> = {
+  'no-sprint': 'Inicia un sprint para sacar tarjetas del Backlog.',
+  'not-validated': 'El moderador debe validar la tarjeta para pasarla a En marcha.',
+};
+
 type MoveField = 'dueWeekday' | 'doneCriteria';
 const MOVE_FIELD_ORDER: readonly MoveField[] = ['dueWeekday', 'doneCriteria'];
 
@@ -443,14 +452,15 @@ interface MoveCardFormProps {
 }
 
 /**
- * "Mover a" (keyboard and phone move path): target column and row limited by the client permission mirror; the
- * card goes to the end of the target cell. Outside the Backlog it needs a day and a done criterion (spec §2.5).
+ * "Mover a" (keyboard and phone move path): target column and row limited by the client permission mirror and the
+ * sprint and validation gates, with a hint for every gate that hides a column; the card goes to the end of the
+ * target cell. Outside the Backlog it needs a day and a done criterion (spec §2.5).
  */
 function MoveCardForm({ context, card, initialTarget, onDone }: MoveCardFormProps) {
   const idPrefix = useId();
   const { board, rows, viewer, online } = context;
   const moveCard = useMoveCard(board.team.id);
-  const [status, setStatus] = useState<CardStatus>(initialTarget?.status ?? card.status);
+  const [chosenStatus, setStatus] = useState<CardStatus>(initialTarget?.status ?? card.status);
   const [rowId, setRowId] = useState(
     (initialTarget ? initialTarget.assigneeId : card.assigneeId) ?? UNASSIGNED_ROW_ID,
   );
@@ -463,8 +473,16 @@ function MoveCardForm({ context, card, initialTarget, onDone }: MoveCardFormProp
   });
 
   if (!viewer) return null;
-  const columns = BOARD_COLUMNS.filter((column) => moveTargetRows(viewer, base, rows, column.status).length > 0);
-  if (columns.length === 0) return null;
+  const permitted = BOARD_COLUMNS.filter((column) => moveTargetRows(viewer, base, rows, column.status).length > 0);
+  const allowed = allowedStatuses(base, board.sprint);
+  const columns = permitted.filter((column) => allowed.includes(column.status));
+  const hints = [
+    ...new Set(permitted.flatMap((column) => moveBlock(base, board.sprint, column.status) ?? [])),
+  ].map((block) => MOVE_BLOCK_HINTS[block]);
+  const hintId = `${idPrefix}-status-hint`;
+  // A card whose own column is closed (no sprint) starts on the first column it may go to.
+  const status = columns.find((column) => column.status === chosenStatus)?.status ?? columns[0]?.status;
+  if (status === undefined) return null;
   const targets = moveTargetRows(viewer, base, rows, status);
   const target = targets.find((row) => row.id === rowId) ?? targets[0];
   const leavesBacklog = status !== 'BACKLOG';
@@ -525,7 +543,13 @@ function MoveCardForm({ context, card, initialTarget, onDone }: MoveCardFormProp
             value={status}
             options={columns.map((column) => ({ value: column.status, label: column.label }))}
             onChange={(value) => setStatus(value as CardStatus)}
+            {...(hints.length > 0 ? { 'aria-describedby': hintId } : {})}
           />
+          {hints.length > 0 && (
+            <p id={hintId} className="text-sm text-slate-700">
+              {hints.join(' ')}
+            </p>
+          )}
           <SelectField
             id={`${idPrefix}-row`}
             label="Fila"

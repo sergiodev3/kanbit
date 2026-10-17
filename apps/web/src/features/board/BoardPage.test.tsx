@@ -2,7 +2,14 @@ import type { BoardResponse } from '@kanbit/shared';
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import type { RouteObject } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { boardFixture, MODERATOR_ID } from '../../test/board-fixtures';
+import {
+  boardFixture,
+  cardFixture,
+  MODERATOR_ID,
+  openSprintBoardFixture,
+  SPRINT_ID,
+  STUDENT_ID,
+} from '../../test/board-fixtures';
 import { jsonResponse, meFixture, mockApi, renderRoutes, stubMatchMedia } from '../../test/utils';
 import { BoardPage } from './BoardPage';
 
@@ -55,6 +62,45 @@ describe('BoardPage', () => {
     expect(tile).toHaveTextContent('El usuario inicia sesión');
     expect(tile).toHaveTextContent('Martes');
     expect(tile).toHaveTextContent('Luis Alumno');
+  });
+
+  it('marks pending validation, due today and overdue cards from the server day, with visible labels', async () => {
+    // Tuesday of the sprint week: Monday cards are late, Tuesday cards are due today.
+    const board = openSprintBoardFixture({ today: { date: '2026-10-20', weekday: 'TUE' } });
+    board.cards.push(
+      cardFixture({
+        id: 'clate',
+        title: 'Modelo de datos',
+        status: 'DOING',
+        sprintId: SPRINT_ID,
+        assigneeId: STUDENT_ID,
+        doneCriteria: 'Migración aplicada',
+        dueWeekday: 'MON',
+        validated: true,
+        validatedById: MODERATOR_ID,
+      }),
+    );
+    mockBoard(board);
+
+    renderRoutes(studentRoutes, ['/team']);
+
+    const dueToday = await screen.findByRole('button', { name: /Login con JWT/ });
+    expect(dueToday).toHaveAccessibleName(/Por validar/);
+    expect(dueToday).toHaveAccessibleName(/Vence hoy/);
+    expect(dueToday).not.toHaveAccessibleName(/Atrasada/);
+    expect(dueToday).toHaveClass('border-dashed');
+
+    const late = screen.getByRole('button', { name: /Modelo de datos/ });
+    expect(late).toHaveAccessibleName(/Atrasada/);
+    expect(late).not.toHaveAccessibleName(/Por validar|Vence hoy/);
+    expect(late).not.toHaveClass('border-dashed');
+
+    // Wednesday's card is not due yet; finished and Backlog cards never get a state.
+    for (const title of ['Pantalla de tablero', 'Configurar CI', 'Diseñar logo', 'Pruebas de API']) {
+      expect(screen.getByRole('button', { name: new RegExp(title) })).not.toHaveAccessibleName(
+        /Por validar|Vence hoy|Atrasada/,
+      );
+    }
   });
 
   it('shows the open sprint in the header', async () => {

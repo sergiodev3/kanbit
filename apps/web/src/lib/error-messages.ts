@@ -37,8 +37,11 @@ const MESSAGES: Record<string, string> = {
 const GENERIC_MESSAGE = 'Ocurrió un error inesperado. Intenta de nuevo.';
 const NETWORK_MESSAGE = 'No se pudo conectar con el servidor. Revisa tu conexión e intenta de nuevo.';
 
+/** The Spanish text for an API error `code`, also used when the client refuses an action the API would refuse. */
+export const codeMessage = (code: string): string => MESSAGES[code] ?? GENERIC_MESSAGE;
+
 export function errorMessage(error: unknown): string {
-  if (error instanceof ApiError) return MESSAGES[error.code] ?? GENERIC_MESSAGE;
+  if (error instanceof ApiError) return codeMessage(error.code);
   // fetch rejects with a TypeError when the network is unreachable.
   if (error instanceof TypeError) return NETWORK_MESSAGE;
   return GENERIC_MESSAGE;

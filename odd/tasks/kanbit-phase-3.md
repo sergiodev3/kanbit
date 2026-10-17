@@ -50,8 +50,9 @@ A Mon–Fri cycle simulated with the injectable `clock` passes the tests.
   typecheck/build/api tests green
 - [x] T3 Web sprint controls: sprint.api, SprintHeader, start/close dialogs, Validar / Validar todas, messages (~800
   forecast, ~760 actual) — route: delegated — web 182 tests (writer + parent spot check); branch `feat/phase-3-web-sprint`
-- [ ] T4 Web states + gates: tile badges, "Mover a" and dnd gates, `applyMove` sprint/validation, README, deploy +
-  production smoke (~550) — route: delegated. First to trim if time runs short (spec §12.1 cut order).
+- [x] T4 (code + README; deploy smoke pending) Web states + gates: tile badges, "Mover a" and dnd gates, `applyMove`
+  sprint/validation, README, deploy + production smoke (~550 forecast, ~450 actual) — route: delegated — web 205 tests
+  (writer + parent spot check); branch `feat/phase-3-web-gates`
 
 ## Checks
 - `pnpm -r typecheck`, per-package tests, `pnpm -r build` green.
@@ -95,5 +96,15 @@ A Mon–Fri cycle simulated with the injectable `clock` passes the tests.
   `tile()`; "Mover a" gate in `MoveCardForm` (CardDialog); dnd gate in `board-dnd.ts` + BoardPage `onDecision`;
   `applyMove` must set `sprintId`/`validated` like the server; `openSprintBoardFixture()` has validated and pending cards.
 
+- T3 committed 6fbced8; RDD assessed medium; the user declined the review for this candidate
+  (`declined_this_candidate`) — T3 ships under ordinary policy with its own tests.
+
+- PR 2 #15 merged (6f049f2); PR 3 #16 opened (T3).
+- T4: slices RED→GREEN. Client mirror of `planMove` (`moveBlock`, `allowedStatuses`): an unvalidated card already in
+  DOING/DONE may stay; a non-Backlog card with `sprintId = null` needs an open sprint even to reorder. `resolveDrop`
+  rejects with `forbidden | no-sprint | not-validated`; `applyMove` mirrors the server's sprint/validation effects;
+  badges are visible text in the tile's accessible name; "Mover a" hints linked via `aria-describedby`. Drop wiring is
+  now tested by mocking BoardDnd and feeding real `resolveDrop` output. README "Phase 3: sprint" section.
+
 ## Next step
-Commit T3, review, open PR 3 after PR 2 merges, then T4.
+Commit T4, review, open PR 4 after PR 3 merges, deploy, production smoke of the sprint cycle.
