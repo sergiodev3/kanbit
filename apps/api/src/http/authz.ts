@@ -1,4 +1,4 @@
-import type { SessionUser } from '@kanbit/shared';
+import type { CardStatus, SessionUser } from '@kanbit/shared';
 import type { RequestHandler } from 'express';
 import { currentUser } from './auth';
 import { AppError } from './errors';
@@ -40,6 +40,21 @@ export const canViewTeam = (user: SessionUser, team: TeamAccess): boolean =>
 
 export const canManageTeamProjects = (user: SessionUser, team: TeamAccess): boolean =>
   isGroupTeacher(user, team) || isTeamModerator(user, team);
+
+/** What authorization needs to know about a card. */
+export interface CardAccess {
+  assigneeId: string | null;
+  status: CardStatus;
+}
+
+/**
+ * Who may edit or delete a card (spec §3): the moderator, the card's assignee, or any member while the card is
+ * an unassigned Backlog card. The teacher is read-only.
+ */
+export const canEditCard = (user: SessionUser, team: TeamAccess, card: CardAccess): boolean =>
+  isTeamModerator(user, team) ||
+  (isTeamMember(user, team) &&
+    (card.assigneeId === user.id || (card.assigneeId === null && card.status === 'BACKLOG')));
 
 // Asserts: resources the user cannot see are reported as missing (404) so ids cannot be probed;
 // visible resources the user cannot act on are 403.

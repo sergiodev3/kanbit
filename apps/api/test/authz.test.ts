@@ -5,6 +5,7 @@ import {
   assertModeratorOrTeacher,
   assertTeamMemberOrTeacher,
   assertTeamTeacher,
+  canEditCard,
   canManageTeamProjects,
   canViewTeam,
   isGroupTeacher,
@@ -58,6 +59,22 @@ describe('authorization predicates', () => {
     expect(canManageTeamProjects(moderator, team)).toBe(true);
     expect(canManageTeamProjects(member, team)).toBe(false);
     expect(canManageTeamProjects(outsider, team)).toBe(false);
+  });
+
+  it('lets the moderator, the assignee, or any member of an unassigned backlog card edit it', () => {
+    const unassignedBacklog = { assigneeId: null, status: 'BACKLOG' } as const;
+    const betosTodo = { assigneeId: 'beto', status: 'TODO' } as const;
+    const anasBacklog = { assigneeId: 'ana', status: 'BACKLOG' } as const;
+
+    expect(canEditCard(moderator, team, betosTodo)).toBe(true);
+    expect(canEditCard(member, team, betosTodo)).toBe(true);
+    expect(canEditCard(member, team, unassignedBacklog)).toBe(true);
+    expect(canEditCard(member, team, anasBacklog)).toBe(false);
+    // The teacher reads the board but never edits cards (spec §3).
+    expect(canEditCard(teacher, team, unassignedBacklog)).toBe(false);
+    expect(canEditCard(outsider, team, unassignedBacklog)).toBe(false);
+    // An assignee who left the team keeps no rights over the card.
+    expect(canEditCard(outsider, team, { assigneeId: 'carla', status: 'TODO' })).toBe(false);
   });
 });
 

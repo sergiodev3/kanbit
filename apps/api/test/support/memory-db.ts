@@ -1,5 +1,14 @@
-import type { CardStatus, Membership, Role } from '@kanbit/shared';
+import {
+  type CardStatus,
+  type Membership,
+  type Role,
+  type SprintStatus,
+  type Weekday,
+  comparePositions,
+  positionBetween,
+} from '@kanbit/shared';
 import type { AuthRepository, UserRecord } from '../../src/modules/auth/auth.service';
+import type { CardRecord, CardsRepository, NewCard, SprintRecord } from '../../src/modules/cards/cards.service';
 import type { GroupRecord, GroupsRepository } from '../../src/modules/groups/groups.service';
 import type { ProjectsRepository } from '../../src/modules/projects/projects.service';
 import type { TeamRecord, TeamsRepository } from '../../src/modules/teams/teams.service';
@@ -36,13 +45,36 @@ interface ProjectRow {
   updatedAt: Date;
 }
 
-interface CardRow {
+type CardRow = CardRecord;
+
+interface SprintRow extends SprintRecord {
+  teamId: string;
+}
+
+interface CardEventRow {
   id: string;
+  cardId: string;
+  userId: string;
+  type: string;
+  fromStatus: CardStatus | null;
+  toStatus: CardStatus | null;
+  createdAt: Date;
+}
+
+export interface AddCardData {
   teamId: string;
   assigneeId: string | null;
-  sprintId: string | null;
   status: CardStatus;
-  validated: boolean;
+  sprintId?: string | null;
+  id?: string;
+  projectId?: string;
+  title?: string;
+  doneCriteria?: string | null;
+  dueWeekday?: Weekday | null;
+  /** Defaults to the end of the card's cell. */
+  position?: string;
+  validated?: boolean;
+  createdById?: string;
 }
 
 /** Mimics Prisma's P2002 so services exercise their unique-violation paths. */
@@ -57,6 +89,10 @@ export class MemoryDb {
   readonly teamMembers: TeamMemberRow[] = [];
   readonly projects: ProjectRow[] = [];
   readonly cards: CardRow[] = [];
+  readonly cardEvents: CardEventRow[] = [];
+  readonly sprints: SprintRow[] = [];
+  /** Test hook: runs once right before the next card insert, as if a concurrent request inserted first. */
+  raceNextCardCreate: ((card: NewCard) => void) | null = null;
   private seq = 0;
 
   constructor(private readonly now: () => Date = () => new Date('2026-10-19T15:00:00Z')) {}
@@ -114,10 +150,43 @@ export class MemoryDb {
     return project;
   }
 
-  addCard(data: { teamId: string; assigneeId: string | null; status: CardStatus; sprintId?: string | null }): CardRow {
-    const card: CardRow = { id: `card${++this.seq}`, sprintId: null, validated: false, ...data };
+  /** Adds a card with harmless defaults; only the cell (team, assignee, status) is required. */
+  addCard(data: AddCardData): CardRow {
+    const now = this.now();
+    const card: CardRow = {
+      id: `card${++this.seq}`,
+      projectId: 'project0',
+      sprintId: null,
+      title: 'Card',
+      doneCriteria: null,
+      dueWeekday: null,
+      position: positionBetween(this.lastPosition(data.teamId, data.assigneeId, data.status), null),
+      validated: false,
+      validatedById: null,
+      carriedOverCount: 0,
+      completedAt: null,
+      createdById: data.assigneeId ?? 'user0',
+      createdAt: now,
+      updatedAt: now,
+      ...data,
+    };
     this.cards.push(card);
     return card;
+  }
+
+  addSprint(data: { teamId: string; number?: number; status?: SprintStatus; goal?: string | null }): SprintRow {
+    const sprint: SprintRow = {
+      id: `sprint${++this.seq}`,
+      number: 1,
+      startDate: '2026-10-19',
+      endDate: '2026-10-23',
+      goal: null,
+      status: 'OPEN',
+      updatedAt: this.now(),
+      ...data,
+    };
+    this.sprints.push(sprint);
+    return sprint;
   }
 
   removeUser(id: string): void {
@@ -294,6 +363,70 @@ export class MemoryDb {
       return { ...project };
     },
   };
+
+  readonly cardsRepository: CardsRepository = {
+    transaction: (fn) => fn(this.cardsRepository),
+    findTeam: async (teamId) => {
+      const team = this.teams.find((row) => row.id === teamId);
+      return team ? this.teamRecord(team) : null;
+    },
+    findOpenSprint: async (teamId) => {
+      const sprint = this.sprints.find((row) => row.teamId === teamId && row.status === 'OPEN');
+      if (!sprint) return null;
+      const { teamId: _teamId, ...record } = sprint;
+      return record;
+    },
+    listProjects: async (teamId) => this.projectsRepository.listByTeam(teamId),
+    listBoardCards: async (teamId, sprintId) =>
+      this.cards
+        .filter((card) => card.teamId === teamId && (card.sprintId === null || card.sprintId === sprintId))
+        .map((card) => ({ ...card })),
+    findProject: async (projectId) => {
+      const project = this.projects.find((row) => row.id === projectId);
+      return project ? { id: project.id, teamId: project.teamId } : null;
+    },
+    findCard: async (cardId) => {
+      const card = this.cards.find((row) => row.id === cardId);
+      return card ? { ...card } : null;
+    },
+    listCellPositions: async (teamId, { assigneeId, status }) =>
+      this.cards
+        .filter((card) => card.teamId === teamId && card.assigneeId === assigneeId && card.status === status)
+        .map((card) => card.position),
+    createCard: async (data) => {
+      const race = this.raceNextCardCreate;
+      this.raceNextCardCreate = null;
+      race?.(data);
+      if (this.cards.some((card) => card.id === data.id)) throw uniqueViolation();
+      return { ...this.addCard({ ...data, assigneeId: null }) };
+    },
+    updateCard: async (cardId, version, changes) => {
+      const card = this.cards.find((row) => row.id === cardId);
+      if (!card || card.updatedAt.getTime() !== version.getTime()) return null;
+      Object.assign(card, changes);
+      return { ...card };
+    },
+    deleteCard: async (cardId, version) => {
+      const index = this.cards.findIndex((row) => row.id === cardId && row.updatedAt.getTime() === version.getTime());
+      if (index < 0) return false;
+      this.cards.splice(index, 1);
+      // Mirrors the CardEvent → Card cascade.
+      const events = this.cardEvents.filter((event) => event.cardId !== cardId);
+      this.cardEvents.splice(0, this.cardEvents.length, ...events);
+      return true;
+    },
+    addEvent: async (event) => {
+      this.cardEvents.push({ id: `event${++this.seq}`, createdAt: this.now(), ...event });
+    },
+  };
+
+  private lastPosition(teamId: string, assigneeId: string | null, status: CardStatus): string | null {
+    const positions = this.cards
+      .filter((card) => card.teamId === teamId && card.assigneeId === assigneeId && card.status === status)
+      .map((card) => card.position)
+      .sort(comparePositions);
+    return positions.at(-1) ?? null;
+  }
 
   private teamRecord(team: TeamRow): TeamRecord {
     const group = this.mustFind(this.groups, team.groupId);

@@ -12,6 +12,9 @@ import { createLogger, type Logger } from './lib/logger';
 import { createPrismaAuthRepository } from './modules/auth/auth.repository';
 import { createAuthRouter } from './modules/auth/auth.routes';
 import { type AuthService, createAuthService } from './modules/auth/auth.service';
+import { createPrismaCardsRepository } from './modules/cards/cards.repository';
+import { createCardsRouter } from './modules/cards/cards.routes';
+import { type CardsService, createCardsService } from './modules/cards/cards.service';
 import { createPrismaGroupsRepository } from './modules/groups/groups.repository';
 import { createGroupsRouter } from './modules/groups/groups.routes';
 import { createGroupsService, type GroupsService } from './modules/groups/groups.service';
@@ -32,6 +35,7 @@ export interface AppServices {
   groups: GroupsService;
   teams: TeamsService;
   projects: ProjectsService;
+  cards: CardsService;
 }
 
 export interface AppDeps {
@@ -50,7 +54,7 @@ export interface AppDeps {
   logLevel?: LevelWithSilent;
 }
 
-function resolveServices({ prisma, services = {} }: AppDeps): AppServices {
+function resolveServices({ prisma, clock, services = {} }: AppDeps): AppServices {
   const requirePrisma = (name: keyof AppServices): PrismaClient => {
     if (!prisma) throw new Error(`createApp: provide deps.prisma or deps.services.${name}`);
     return prisma;
@@ -64,6 +68,8 @@ function resolveServices({ prisma, services = {} }: AppDeps): AppServices {
     projects:
       services.projects ??
       createProjectsService({ repository: createPrismaProjectsRepository(requirePrisma('projects')) }),
+    cards:
+      services.cards ?? createCardsService({ repository: createPrismaCardsRepository(requirePrisma('cards')), clock }),
   };
 }
 
@@ -99,6 +105,7 @@ export function createApp(deps: AppDeps): Express {
   api.use(createGroupsRouter({ service: services.groups, requireAuth }));
   api.use(createTeamsRouter({ service: services.teams, requireAuth }));
   api.use(createProjectsRouter({ service: services.projects, requireAuth }));
+  api.use(createCardsRouter({ service: services.cards, requireAuth }));
   app.use('/api/v1', api);
 
   app.use(notFoundHandler);

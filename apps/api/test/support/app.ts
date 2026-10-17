@@ -2,6 +2,7 @@ import { createApp, type AppDeps } from '../../src/app';
 import { type AuthConfig, SESSION_COOKIE, signSessionToken } from '../../src/http/auth';
 import { createClock } from '../../src/lib/clock';
 import { createAuthService } from '../../src/modules/auth/auth.service';
+import { createCardsService } from '../../src/modules/cards/cards.service';
 import { createGroupsService } from '../../src/modules/groups/groups.service';
 import { createProjectsService } from '../../src/modules/projects/projects.service';
 import { createTeamsService } from '../../src/modules/teams/teams.service';
@@ -38,6 +39,7 @@ export function buildTestApp(options: TestAppOptions = {}) {
       groups: createGroupsService({ repository: db.groupsRepository }),
       teams: createTeamsService({ repository: db.teamsRepository }),
       projects: createProjectsService({ repository: db.projectsRepository }),
+      cards: createCardsService({ repository: db.cardsRepository, clock }),
     },
   });
 
