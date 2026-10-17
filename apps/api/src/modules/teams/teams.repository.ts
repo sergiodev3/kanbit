@@ -1,4 +1,5 @@
 import type { Prisma, PrismaClient } from '../../generated/prisma/client';
+import { releaseEvents } from '../cards/card.rules';
 import type { TeamRecord, TeamsRepository } from './teams.service';
 
 const teamSelect = {
@@ -78,11 +79,22 @@ function bind(db: Prisma.TransactionClient, root: PrismaClient | null): TeamsRep
       }
     },
 
-    async releaseUnfinishedCards(teamId, userIds) {
-      // Backlog = no sprint, no assignee; BACKLOG cards are never validated.
-      await db.card.updateMany({
+    async releaseUnfinishedCards(teamId, userIds, actorId) {
+      const cards = await db.card.findMany({
         where: { teamId, assigneeId: { in: [...userIds] }, status: { not: 'DONE' } },
+        select: { id: true, status: true },
+      });
+      if (cards.length === 0) return;
+      // Backlog = no sprint, no assignee; BACKLOG cards are never validated. Updating by id keeps the rows and
+      // their events in step inside the caller's transaction.
+      await db.card.updateMany({
+        where: { id: { in: cards.map((card) => card.id) } },
         data: { status: 'BACKLOG', assigneeId: null, sprintId: null, validated: false, validatedById: null },
+      });
+      await db.cardEvent.createMany({
+        data: cards.flatMap((card) =>
+          releaseEvents(card.status).map((event) => ({ cardId: card.id, userId: actorId, ...event })),
+        ),
       });
     },
 

@@ -66,7 +66,7 @@ describe('UpdateCardRequest', () => {
 });
 
 describe('MoveCardRequest', () => {
-  it('requires status, assignee (nullable) and a valid position', () => {
+  it('requires status, assignee (nullable) and a position string', () => {
     expect(MoveCardRequest.parse({ status: 'TODO', assigneeId: id, position: 'a0', dueWeekday: 'MON' })).toEqual({
       status: 'TODO',
       assigneeId: id,
@@ -75,7 +75,9 @@ describe('MoveCardRequest', () => {
     });
     expect(MoveCardRequest.safeParse({ status: 'BACKLOG', assigneeId: null, position: 'a0' }).success).toBe(true);
     expect(MoveCardRequest.safeParse({ status: 'BACKLOG', position: 'a0' }).success).toBe(false);
-    expect(MoveCardRequest.safeParse({ status: 'TODO', assigneeId: id, position: 'a00' }).success).toBe(false);
+    // The format is checked by the API so a malformed key gets its own error code (400 INVALID_POSITION).
+    expect(MoveCardRequest.safeParse({ status: 'TODO', assigneeId: id, position: 'a00' }).success).toBe(true);
+    expect(MoveCardRequest.safeParse({ status: 'TODO', assigneeId: id }).success).toBe(false);
     expect(MoveCardRequest.safeParse({ status: 'LATER', assigneeId: id, position: 'a0' }).success).toBe(false);
   });
 });

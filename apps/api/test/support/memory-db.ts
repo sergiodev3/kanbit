@@ -8,6 +8,7 @@ import {
   positionBetween,
 } from '@kanbit/shared';
 import type { AuthRepository, UserRecord } from '../../src/modules/auth/auth.service';
+import { releaseEvents } from '../../src/modules/cards/card.rules';
 import type { CardRecord, CardsRepository, NewCard, SprintRecord } from '../../src/modules/cards/cards.service';
 import type { GroupRecord, GroupsRepository } from '../../src/modules/groups/groups.service';
 import type { ProjectsRepository } from '../../src/modules/projects/projects.service';
@@ -74,6 +75,7 @@ export interface AddCardData {
   /** Defaults to the end of the card's cell. */
   position?: string;
   validated?: boolean;
+  validatedById?: string | null;
   createdById?: string;
 }
 
@@ -331,11 +333,22 @@ export class MemoryDb {
       }
       for (const row of plan.create) this.addTeamMember({ teamId: team.id, ...row });
     },
-    releaseUnfinishedCards: async (teamId, userIds) => {
+    releaseUnfinishedCards: async (teamId, userIds, actorId) => {
       for (const card of this.cards) {
         if (card.teamId !== teamId || card.status === 'DONE') continue;
         if (card.assigneeId === null || !userIds.includes(card.assigneeId)) continue;
-        Object.assign(card, { status: 'BACKLOG', assigneeId: null, sprintId: null, validated: false });
+        for (const event of releaseEvents(card.status)) {
+          const id = `event${++this.seq}`;
+          this.cardEvents.push({ id, cardId: card.id, userId: actorId, createdAt: this.now(), ...event });
+        }
+        Object.assign(card, {
+          status: 'BACKLOG',
+          assigneeId: null,
+          sprintId: null,
+          validated: false,
+          validatedById: null,
+          updatedAt: this.now(),
+        });
       }
     },
     setModerator: async (teamId, userId) => {

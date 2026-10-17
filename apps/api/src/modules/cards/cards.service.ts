@@ -3,6 +3,7 @@ import {
   type CardResponse,
   type CardStatus,
   type CreateCardRequest,
+  type MoveCardRequest,
   type SessionUser,
   type SprintStatus,
   type UpdateCardRequest,
@@ -11,12 +12,21 @@ import {
   comparePositions,
   positionBetween,
 } from '@kanbit/shared';
-import { type TeamAccess, assertTeamMemberOrTeacher, canEditCard, forbidden, isTeamMember } from '../../http/authz';
+import {
+  type TeamAccess,
+  assertCanMoveCard,
+  assertTeamMemberOrTeacher,
+  canEditCard,
+  cardNotFound,
+  forbidden,
+  isTeamMember,
+} from '../../http/authz';
 import { AppError } from '../../http/errors';
 import type { Clock } from '../../lib/clock';
 import { isUniqueViolation } from '../../lib/prisma';
 import type { ProjectRecord } from '../projects/projects.service';
 import type { TeamMemberRecord } from '../teams/teams.service';
+import { type MoveChanges, cardIncomplete, planMove } from './card.rules';
 
 export interface CardRecord {
   id: string;
@@ -78,8 +88,11 @@ export interface CardContent {
   projectId?: string;
 }
 
-/** Types this module writes to `CardEvent.type`. */
-export type CardEventType = 'CREATED' | 'EDITED';
+/** Fields an update may write: content (`PATCH`) or placement (`/move`). */
+export type CardChanges = CardContent & Partial<MoveChanges> & { updatedAt: Date };
+
+/** Types written to `CardEvent.type`. */
+export type CardEventType = 'CREATED' | 'EDITED' | 'MOVED' | 'ASSIGNED';
 
 export interface NewCardEvent {
   cardId: string;
@@ -108,7 +121,7 @@ export interface CardsRepository {
    * Applies `changes` only while the card's `updatedAt` still equals `version` (optimistic lock); returns null when
    * the card changed or disappeared meanwhile.
    */
-  updateCard(cardId: string, version: Date, changes: CardContent & { updatedAt: Date }): Promise<CardRecord | null>;
+  updateCard(cardId: string, version: Date, changes: CardChanges): Promise<CardRecord | null>;
   /** Deletes the card (its events cascade) only while `updatedAt` still equals `version`; false otherwise. */
   deleteCard(cardId: string, version: Date): Promise<boolean>;
   addEvent(event: NewCardEvent): Promise<void>;
@@ -126,6 +139,7 @@ export interface CardsService {
   get(actor: SessionUser, cardId: string): Promise<CardResponse>;
   update(actor: SessionUser, cardId: string, input: UpdateCardRequest): Promise<CardResponse>;
   remove(actor: SessionUser, cardId: string): Promise<void>;
+  move(actor: SessionUser, cardId: string, input: MoveCardRequest): Promise<CardResponse>;
 }
 
 export interface CardsServiceDeps {
@@ -137,10 +151,7 @@ const iso = (date: Date) => date.toISOString();
 
 const idConflict = () => new AppError(409, 'ID_CONFLICT', 'A card with this id already exists');
 const invalidProject = () => new AppError(400, 'INVALID_PROJECT', 'The project does not belong to the team');
-const cardNotFound = () => new AppError(404, 'CARD_NOT_FOUND', 'Card not found');
 const cardConflict = () => new AppError(409, 'CARD_CONFLICT', 'The card changed since it was loaded; reload and retry');
-const cardIncomplete = () =>
-  new AppError(400, 'CARD_INCOMPLETE', 'Cards outside the backlog need done criteria and a due weekday');
 
 /** Optimistic concurrency (spec §5.3.1): a given `expectedUpdatedAt` must match the stored one exactly. */
 const isStale = (card: CardRecord, expectedUpdatedAt: string | undefined): boolean =>
@@ -308,6 +319,26 @@ export function createCardsService({ repository, clock }: CardsServiceDeps): Car
         }
         // The version guard stops a delete racing a concurrent move out of the Backlog.
         if (!(await tx.deleteCard(card.id, card.updatedAt))) throw cardConflict();
+      });
+    },
+
+    async move(actor, cardId, { expectedUpdatedAt, ...target }) {
+      return repository.transaction(async (tx) => {
+        const card = await tx.findCard(cardId);
+        if (!card) throw cardNotFound();
+        const team = await tx.findTeam(card.teamId);
+        assertCanMoveCard(actor, team, card, target);
+        if (isStale(card, expectedUpdatedAt)) throw cardConflict();
+
+        const now = clock.now();
+        const { changes, events } = planMove(card, target, {
+          now,
+          memberIds: team.members.map((member) => member.userId),
+        });
+        const updated = await tx.updateCard(card.id, card.updatedAt, { ...changes, updatedAt: now });
+        if (!updated) throw cardConflict();
+        for (const event of events) await tx.addEvent({ cardId: card.id, userId: actor.id, ...event });
+        return toCardResponse(updated);
       });
     },
   };

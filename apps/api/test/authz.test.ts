@@ -4,8 +4,10 @@ import {
   assertGroupTeacher,
   assertModeratorOrTeacher,
   assertTeamMemberOrTeacher,
+  assertCanMoveCard,
   assertTeamTeacher,
   canEditCard,
+  canMoveCard,
   canManageTeamProjects,
   canViewTeam,
   isGroupTeacher,
@@ -75,6 +77,69 @@ describe('authorization predicates', () => {
     expect(canEditCard(outsider, team, unassignedBacklog)).toBe(false);
     // An assignee who left the team keeps no rights over the card.
     expect(canEditCard(outsider, team, { assigneeId: 'carla', status: 'TODO' })).toBe(false);
+  });
+});
+
+describe('canMoveCard (spec §3)', () => {
+  const betosTodo = { assigneeId: 'beto', status: 'TODO' } as const;
+  const anasTodo = { assigneeId: 'ana', status: 'TODO' } as const;
+  const unassigned = { assigneeId: null, status: 'BACKLOG' } as const;
+  const to = (status: 'BACKLOG' | 'TODO' | 'DOING' | 'DONE', assigneeId: string | null) => ({ status, assigneeId });
+
+  it('lets a member move their own card within their row or back to the unassigned backlog', () => {
+    expect(canMoveCard(member, team, betosTodo, to('DOING', 'beto'))).toBe(true);
+    expect(canMoveCard(member, team, betosTodo, to('BACKLOG', 'beto'))).toBe(true);
+    expect(canMoveCard(member, team, betosTodo, to('BACKLOG', null))).toBe(true);
+  });
+
+  it('lets a member claim an unassigned card into their own row only', () => {
+    expect(canMoveCard(member, team, unassigned, to('TODO', 'beto'))).toBe(true);
+    expect(canMoveCard(member, team, unassigned, to('BACKLOG', 'beto'))).toBe(true);
+    expect(canMoveCard(member, team, unassigned, to('BACKLOG', null))).toBe(true);
+    expect(canMoveCard(member, team, unassigned, to('TODO', 'ana'))).toBe(false);
+  });
+
+  it("refuses a member moving another member's card or their own into another row", () => {
+    expect(canMoveCard(member, team, anasTodo, to('DOING', 'ana'))).toBe(false);
+    expect(canMoveCard(member, team, anasTodo, to('TODO', 'beto'))).toBe(false);
+    expect(canMoveCard(member, team, betosTodo, to('TODO', 'ana'))).toBe(false);
+    // Unassigned outside the backlog is never a valid target for a member.
+    expect(canMoveCard(member, team, betosTodo, to('TODO', null))).toBe(false);
+  });
+
+  it('lets the moderator move any card to any row', () => {
+    expect(canMoveCard(moderator, team, betosTodo, to('DONE', 'beto'))).toBe(true);
+    expect(canMoveCard(moderator, team, betosTodo, to('TODO', 'ana'))).toBe(true);
+    expect(canMoveCard(moderator, team, unassigned, to('TODO', 'beto'))).toBe(true);
+  });
+
+  it('refuses the teacher and outsiders', () => {
+    expect(canMoveCard(teacher, team, unassigned, to('BACKLOG', null))).toBe(false);
+    expect(canMoveCard(outsider, team, unassigned, to('BACKLOG', null))).toBe(false);
+  });
+
+  it('hides the card from outsiders (404 CARD_NOT_FOUND) and forbids the teacher and other members (403)', () => {
+    expect(outcome(() => assertCanMoveCard(member, team, betosTodo, to('DOING', 'beto')))).toBeNull();
+    expect(outcome(() => assertCanMoveCard(outsider, team, betosTodo, to('DOING', 'beto')))).toEqual({
+      status: 404,
+      code: 'CARD_NOT_FOUND',
+    });
+    expect(outcome(() => assertCanMoveCard(otherTeacher, team, betosTodo, to('DOING', 'beto')))).toEqual({
+      status: 404,
+      code: 'CARD_NOT_FOUND',
+    });
+    expect(outcome(() => assertCanMoveCard(member, null, betosTodo, to('DOING', 'beto')))).toEqual({
+      status: 404,
+      code: 'CARD_NOT_FOUND',
+    });
+    expect(outcome(() => assertCanMoveCard(teacher, team, betosTodo, to('DOING', 'beto')))).toEqual({
+      status: 403,
+      code: 'FORBIDDEN',
+    });
+    expect(outcome(() => assertCanMoveCard(member, team, anasTodo, to('DOING', 'ana')))).toEqual({
+      status: 403,
+      code: 'FORBIDDEN',
+    });
   });
 });
 

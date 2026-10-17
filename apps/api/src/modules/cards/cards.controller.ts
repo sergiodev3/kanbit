@@ -1,4 +1,4 @@
-import { CreateCardRequest, UpdateCardRequest, cuid2Id } from '@kanbit/shared';
+import { CreateCardRequest, MoveCardRequest, UpdateCardRequest, cuid2Id } from '@kanbit/shared';
 import type { RequestHandler } from 'express';
 import { currentUser } from '../../http/auth';
 import type { CardsService } from './cards.service';
@@ -28,5 +28,10 @@ export function createCardsController(service: CardsService) {
     res.status(204).end();
   };
 
-  return { board, create, get, update, remove };
+  const move: RequestHandler = async (req, res) => {
+    const cardId = cuid2Id.parse(req.params.id);
+    res.json(await service.move(currentUser(req), cardId, MoveCardRequest.parse(req.body)));
+  };
+
+  return { board, create, get, update, remove, move };
 }

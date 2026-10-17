@@ -46,8 +46,11 @@ export interface TeamsRepository {
   findGroupStudentIds(groupId: string, userIds: readonly string[]): Promise<string[]>;
   /** Deletes `plan.remove`, updates `plan.keep`, then inserts `plan.create`. */
   applyMemberPlan(team: { id: string; groupId: string }, plan: MemberPlan): Promise<void>;
-  /** Unfinished cards (status other than DONE) of these users go back to the team backlog, unassigned. */
-  releaseUnfinishedCards(teamId: string, userIds: readonly string[]): Promise<void>;
+  /**
+   * Unfinished cards (status other than DONE) of these users go back to the team backlog, unassigned, with their
+   * history (`releaseEvents`) authored by `actorId`.
+   */
+  releaseUnfinishedCards(teamId: string, userIds: readonly string[], actorId: string): Promise<void>;
   /** Makes `userId` the only moderator of the team. */
   setModerator(teamId: string, userId: string): Promise<void>;
 }
@@ -100,9 +103,9 @@ export function createTeamsService({ repository }: TeamsServiceDeps): TeamsServi
   }
 
   /** Applies a plan and releases the cards of whoever left the team (spec §6.1). */
-  async function applyPlan(repo: TeamsRepository, team: TeamRecord, plan: MemberPlan): Promise<void> {
+  async function applyPlan(repo: TeamsRepository, actor: SessionUser, team: TeamRecord, plan: MemberPlan) {
     await repo.applyMemberPlan(team, plan);
-    if (plan.remove.length > 0) await repo.releaseUnfinishedCards(team.id, plan.remove);
+    if (plan.remove.length > 0) await repo.releaseUnfinishedCards(team.id, plan.remove, actor.id);
   }
 
   return {
@@ -152,10 +155,10 @@ export function createTeamsService({ repository }: TeamsServiceDeps): TeamsServi
             const current = memberIds(other);
             if (other.id === team.id || !current.some((id) => incoming.has(id))) continue;
             const remaining = current.filter((id) => !incoming.has(id));
-            await applyPlan(tx, other, planMembers(current, remaining, moderatorOf(other.members)));
+            await applyPlan(tx, actor, other, planMembers(current, remaining, moderatorOf(other.members)));
           }
 
-          await applyPlan(tx, team, planMembers(memberIds(team), userIds, moderatorOf(team.members)));
+          await applyPlan(tx, actor, team, planMembers(memberIds(team), userIds, moderatorOf(team.members)));
           return reload(tx, team.id);
         });
       } catch (err) {
