@@ -524,16 +524,32 @@ describe('DELETE /cards/:id', () => {
 describe('POST /cards/:id/move', () => {
   const LATER = new Date('2026-10-20T17:45:00Z');
 
+  /** Moves happen during a week: the team has an open sprint unless a test says otherwise. */
+  const setupMove = async () => {
+    const ctx = await setup();
+    return { ...ctx, sprint: ctx.db.addSprint({ teamId: ctx.team.id }) };
+  };
+  type MoveCtx = Awaited<ReturnType<typeof setupMove>>;
+
   const move = async (ctx: Awaited<ReturnType<typeof setup>>, user: { id: string }, id: string, body: object) =>
     request(ctx.app).post(ctx.api(`/cards/${id}/move`)).set('Cookie', await ctx.as(user)).send(body);
 
-  /** A card ready to leave the backlog, assigned to `assigneeId`. */
-  const readyCard = (ctx: Awaited<ReturnType<typeof setup>>, assigneeId: string, status: 'TODO' | 'DOING') =>
-    ctx.db.addCard({ teamId: ctx.team.id, assigneeId, status, dueWeekday: 'MON', doneCriteria: 'Demo' });
+  /** A validated card of the open sprint, assigned to `assigneeId`. */
+  const readyCard = (ctx: MoveCtx, assigneeId: string, status: 'TODO' | 'DOING') =>
+    ctx.db.addCard({
+      teamId: ctx.team.id,
+      assigneeId,
+      status,
+      dueWeekday: 'MON',
+      doneCriteria: 'Demo',
+      sprintId: ctx.sprint.id,
+      validated: true,
+      validatedById: ctx.moderator.id,
+    });
 
-  it('claims an unassigned card into the mover row (200), bumps updatedAt and records MOVED + ASSIGNED', async () => {
-    const ctx = await setup();
-    const { db, team, member, project, time } = ctx;
+  it('claims an unassigned card into the mover row (200), attaching the open sprint (MOVED + ASSIGNED)', async () => {
+    const ctx = await setupMove();
+    const { db, team, member, project, time, sprint } = ctx;
     const card = db.addCard({ teamId: team.id, projectId: project.id, assigneeId: null, status: 'BACKLOG' });
     time.now = LATER;
 
@@ -554,7 +570,8 @@ describe('POST /cards/:id/move', () => {
       position: 'a0',
       dueWeekday: 'WED',
       doneCriteria: 'Demo en clase',
-      sprintId: null,
+      sprintId: sprint.id,
+      validated: false,
       completedAt: null,
       updatedAt: LATER.toISOString(),
     });
@@ -567,7 +584,7 @@ describe('POST /cards/:id/move', () => {
   });
 
   it('writes no event for a pure reorder', async () => {
-    const ctx = await setup();
+    const ctx = await setupMove();
     const card = readyCard(ctx, ctx.member.id, 'TODO');
 
     const res = await move(ctx, ctx.member, card.id, { status: 'TODO', assigneeId: ctx.member.id, position: 'Zz' });
@@ -578,7 +595,7 @@ describe('POST /cards/:id/move', () => {
   });
 
   it('stamps completedAt from the clock entering DONE and clears it leaving DONE', async () => {
-    const ctx = await setup();
+    const ctx = await setupMove();
     const { db, member, time } = ctx;
     const card = readyCard(ctx, member.id, 'DOING');
     time.now = LATER;
@@ -597,7 +614,7 @@ describe('POST /cards/:id/move', () => {
   });
 
   it("forbids a member moving another member's card (403) and lets the moderator do it (200)", async () => {
-    const ctx = await setup();
+    const ctx = await setupMove();
     const { db, member, other, moderator, teacher } = ctx;
     const betos = readyCard(ctx, member.id, 'TODO');
     const target = { status: 'DOING', assigneeId: member.id, position: 'a0' };
@@ -617,7 +634,7 @@ describe('POST /cards/:id/move', () => {
   });
 
   it('hides the card from outsiders and other teachers (404 CARD_NOT_FOUND)', async () => {
-    const ctx = await setup();
+    const ctx = await setupMove();
     const { db, team, outsider, otherTeacher } = ctx;
     const card = db.addCard({ teamId: team.id, assigneeId: null, status: 'BACKLOG' });
     const body = { status: 'BACKLOG', assigneeId: null, position: 'a0' };
@@ -630,7 +647,7 @@ describe('POST /cards/:id/move', () => {
   });
 
   it('refuses incomplete cards, outside assignees and malformed positions (400) without writing', async () => {
-    const ctx = await setup();
+    const ctx = await setupMove();
     const { db, team, member, moderator, outsider } = ctx;
     const card = db.addCard({ teamId: team.id, assigneeId: null, status: 'BACKLOG' });
 
@@ -654,7 +671,7 @@ describe('POST /cards/:id/move', () => {
   });
 
   it('rejects a stale expectedUpdatedAt (409 CARD_CONFLICT) without writing', async () => {
-    const ctx = await setup();
+    const ctx = await setupMove();
     const { db, team, member } = ctx;
     const card = db.addCard({ teamId: team.id, assigneeId: member.id, status: 'BACKLOG' });
 
@@ -669,5 +686,81 @@ describe('POST /cards/:id/move', () => {
     expect(res.body.error.code).toBe('CARD_CONFLICT');
     expect(db.cards[0]?.assigneeId).toBe(member.id);
     expect(db.cardEvents).toEqual([]);
+  });
+
+  it('refuses to leave the backlog without an open sprint (409 NO_OPEN_SPRINT) without writing', async () => {
+    const ctx = await setup();
+    const { db, team, member } = ctx;
+    db.addSprint({ teamId: team.id, status: 'CLOSED' });
+    const card = db.addCard({
+      teamId: team.id,
+      assigneeId: member.id,
+      status: 'BACKLOG',
+      dueWeekday: 'MON',
+      doneCriteria: 'x',
+    });
+
+    const res = await move(ctx, member, card.id, { status: 'TODO', assigneeId: member.id, position: 'a0' });
+
+    expect(res.status).toBe(409);
+    expect(res.body.error.code).toBe('NO_OPEN_SPRINT');
+    expect(db.cards[0]).toMatchObject({ status: 'BACKLOG', sprintId: null });
+    expect(db.cardEvents).toEqual([]);
+    // Reordering inside the backlog needs no sprint.
+    const reorder = await move(ctx, member, card.id, { status: 'BACKLOG', assigneeId: member.id, position: 'a5' });
+    expect(reorder.status).toBe(200);
+  });
+
+  it('refuses an unvalidated card entering DOING or DONE (409 CARD_NOT_VALIDATED), even by the moderator', async () => {
+    const ctx = await setupMove();
+    const { db, team, member, moderator, sprint } = ctx;
+    const card = db.addCard({
+      teamId: team.id,
+      assigneeId: member.id,
+      status: 'TODO',
+      dueWeekday: 'MON',
+      doneCriteria: 'x',
+      sprintId: sprint.id,
+    });
+
+    for (const [user, status] of [
+      [member, 'DOING'],
+      [moderator, 'DONE'],
+    ] as const) {
+      const res = await move(ctx, user, card.id, { status, assigneeId: member.id, position: 'a0' });
+      expect(res.status).toBe(409);
+      expect(res.body.error.code).toBe('CARD_NOT_VALIDATED');
+    }
+    expect(db.cards[0]?.status).toBe('TODO');
+    expect(db.cardEvents).toEqual([]);
+  });
+
+  it('checks permissions (403) before the sprint and validation rules (409)', async () => {
+    const ctx = await setup();
+    const { db, team, member, other } = ctx;
+    const card = db.addCard({
+      teamId: team.id,
+      assigneeId: member.id,
+      status: 'BACKLOG',
+      dueWeekday: 'MON',
+      doneCriteria: 'x',
+    });
+
+    const res = await move(ctx, other, card.id, { status: 'DOING', assigneeId: member.id, position: 'a0' });
+
+    expect(res.status).toBe(403);
+    expect(res.body.error.code).toBe('FORBIDDEN');
+  });
+
+  it('back to the backlog detaches the sprint and clears the validation, keeping the assignee', async () => {
+    const ctx = await setupMove();
+    const { db, member } = ctx;
+    const card = readyCard(ctx, member.id, 'DOING');
+
+    const res = await move(ctx, member, card.id, { status: 'BACKLOG', assigneeId: member.id, position: 'a0' });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ status: 'BACKLOG', assigneeId: member.id, sprintId: null, validated: false });
+    expect(db.cards[0]).toMatchObject({ sprintId: null, validated: false, validatedById: null });
   });
 });

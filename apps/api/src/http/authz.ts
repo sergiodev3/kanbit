@@ -42,6 +42,10 @@ export const canViewTeam = (user: SessionUser, team: TeamAccess): boolean =>
 export const canManageTeamProjects = (user: SessionUser, team: TeamAccess): boolean =>
   isGroupTeacher(user, team) || isTeamModerator(user, team);
 
+/** Closing the sprint (spec §3): the moderator or the group's teacher. */
+export const canCloseSprint = (user: SessionUser, team: TeamAccess): boolean =>
+  isGroupTeacher(user, team) || isTeamModerator(user, team);
+
 /** What authorization needs to know about a card. */
 export interface CardAccess {
   assigneeId: string | null;
@@ -111,6 +115,26 @@ export function assertModeratorOrTeacher<T extends TeamAccess>(
 ): asserts team is T {
   assertTeamMemberOrTeacher(user, team, notFound);
   if (!canManageTeamProjects(user, team)) throw forbidden();
+}
+
+/** Moderator-only team actions (starting the sprint): the teacher and plain members get 403. */
+export function assertTeamModerator<T extends TeamAccess>(
+  user: SessionUser,
+  team: T | null,
+  notFound: NotFound = teamNotFound,
+): asserts team is T {
+  assertTeamMemberOrTeacher(user, team, notFound);
+  if (!isTeamModerator(user, team)) throw forbidden();
+}
+
+/** Closing a sprint: hidden from non-members, 403 for plain members. */
+export function assertCanCloseSprint<T extends TeamAccess>(
+  user: SessionUser,
+  team: T | null,
+  notFound: NotFound,
+): asserts team is T {
+  assertTeamMemberOrTeacher(user, team, notFound);
+  if (!canCloseSprint(user, team)) throw forbidden();
 }
 
 /** Moving a card: hidden from non-members (404 CARD_NOT_FOUND), 403 when `canMoveCard` refuses. */

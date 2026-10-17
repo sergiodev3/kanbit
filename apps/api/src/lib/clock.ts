@@ -20,12 +20,19 @@ export interface Clock {
   weekdayInZone(timeZone?: string): Weekday | null;
   /** Monday and Friday of the ISO week that contains "today" in the zone. */
   weekBounds(timeZone?: string): WeekBounds;
+  /**
+   * The school week a sprint started now belongs to (spec §7.2): the current Monday–Friday on a weekday, the next
+   * one on Saturday or Sunday.
+   */
+  sprintWeek(timeZone?: string): WeekBounds;
 }
 
 // ISO day numbers: 1 = Monday ... 7 = Sunday.
 const SCHOOL_DAYS: Record<number, Weekday> = { 1: 'MON', 2: 'TUE', 3: 'WED', 4: 'THU', 5: 'FRI' };
 
 const toIsoDate = (date: Date): IsoDate => format(date, 'yyyy-MM-dd');
+
+const boundsFrom = (monday: Date): WeekBounds => ({ monday: toIsoDate(monday), friday: toIsoDate(addDays(monday, 4)) });
 
 export function createClock(now: () => Date = () => new Date()): Clock {
   const zoned = (timeZone: string) => new TZDate(now().getTime(), timeZone);
@@ -34,9 +41,11 @@ export function createClock(now: () => Date = () => new Date()): Clock {
     now: () => new Date(now().getTime()),
     todayInZone: (timeZone = DEFAULT_TIME_ZONE) => toIsoDate(zoned(timeZone)),
     weekdayInZone: (timeZone = DEFAULT_TIME_ZONE) => SCHOOL_DAYS[getISODay(zoned(timeZone))] ?? null,
-    weekBounds: (timeZone = DEFAULT_TIME_ZONE) => {
-      const monday = startOfISOWeek(zoned(timeZone));
-      return { monday: toIsoDate(monday), friday: toIsoDate(addDays(monday, 4)) };
+    weekBounds: (timeZone = DEFAULT_TIME_ZONE) => boundsFrom(startOfISOWeek(zoned(timeZone))),
+    sprintWeek: (timeZone = DEFAULT_TIME_ZONE) => {
+      const today = zoned(timeZone);
+      const weekend = SCHOOL_DAYS[getISODay(today)] === undefined;
+      return boundsFrom(addDays(startOfISOWeek(today), weekend ? 7 : 0));
     },
   };
 }

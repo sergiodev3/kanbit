@@ -5,7 +5,8 @@ import type { CardRecord } from '../src/modules/cards/cards.service';
 
 const CREATED = new Date('2026-10-19T15:00:00Z');
 const NOW = new Date('2026-10-20T16:00:00Z');
-const context = { now: NOW, memberIds: ['ana', 'beto'] };
+const context = { now: NOW, memberIds: ['ana', 'beto'], openSprintId: 'sprint1' };
+const noSprint = { ...context, openSprintId: null };
 
 const card = (overrides: Partial<CardRecord> = {}): CardRecord => ({
   id: 'card1',
@@ -43,7 +44,7 @@ function failure(fn: () => unknown): { status: number; code: string } {
 }
 
 describe('planMove', () => {
-  it('takes a complete backlog card into a member row, recording MOVED', () => {
+  it('takes a complete backlog card into a member row, attaching the open sprint and recording MOVED', () => {
     const target: MoveTarget = { status: 'TODO', assigneeId: 'beto', position: 'a1' };
 
     expect(planMove(ready(), target, context)).toEqual({
@@ -53,7 +54,7 @@ describe('planMove', () => {
         position: 'a1',
         doneCriteria: 'Demo en clase',
         dueWeekday: 'WED',
-        sprintId: null,
+        sprintId: 'sprint1',
         validated: false,
         validatedById: null,
         completedAt: null,
@@ -81,13 +82,15 @@ describe('planMove', () => {
   });
 
   it('records only ASSIGNED when the row changes but the column does not', () => {
-    const plan = planMove(ready({ status: 'DOING' }), { status: 'DOING', assigneeId: 'ana', position: 'a0' }, context);
+    const doing = ready({ status: 'DOING', sprintId: 'sprint1', validated: true });
+    const plan = planMove(doing, { status: 'DOING', assigneeId: 'ana', position: 'a0' }, context);
 
     expect(plan.events).toEqual([{ type: 'ASSIGNED', fromStatus: null, toStatus: null }]);
   });
 
   it('writes no event for a pure reorder within the same cell', () => {
-    const plan = planMove(ready({ status: 'TODO' }), { status: 'TODO', assigneeId: 'beto', position: 'Zz' }, context);
+    const todo = ready({ status: 'TODO', sprintId: 'sprint1' });
+    const plan = planMove(todo, { status: 'TODO', assigneeId: 'beto', position: 'Zz' }, context);
 
     expect(plan.changes.position).toBe('Zz');
     expect(plan.events).toEqual([]);
@@ -145,8 +148,8 @@ describe('planMove', () => {
   });
 
   it('stamps completedAt entering DONE, keeps it while reordering in DONE and clears it leaving DONE', () => {
-    const doing = ready({ status: 'DOING' });
-    const done = ready({ status: 'DONE', completedAt: CREATED });
+    const doing = ready({ status: 'DOING', sprintId: 'sprint1', validated: true });
+    const done = ready({ status: 'DONE', sprintId: 'sprint1', validated: true, completedAt: CREATED });
 
     const completedAt = (source: CardRecord, status: MoveTarget['status'], position = 'a0') =>
       planMove(source, { status, assigneeId: 'beto', position }, context).changes.completedAt;
@@ -155,5 +158,89 @@ describe('planMove', () => {
     expect(completedAt(done, 'DONE', 'a5')).toEqual(CREATED);
     expect(completedAt(done, 'DOING')).toBeNull();
     expect(completedAt(done, 'BACKLOG')).toBeNull();
+  });
+
+  describe('open sprint (spec §7.2)', () => {
+    const noOpenSprint = { status: 409, code: 'NO_OPEN_SPRINT' };
+
+    it('refuses to leave the backlog without an open sprint (409 NO_OPEN_SPRINT)', () => {
+      for (const status of ['TODO', 'DOING', 'DONE'] as const) {
+        expect(failure(() => planMove(ready(), { status, assigneeId: 'beto', position: 'a1' }, noSprint))).toEqual(
+          noOpenSprint,
+        );
+      }
+    });
+
+    it('still allows moves inside the backlog without an open sprint', () => {
+      const plan = planMove(ready(), { status: 'BACKLOG', assigneeId: 'ana', position: 'a1' }, noSprint);
+
+      expect(plan.changes).toMatchObject({ status: 'BACKLOG', assigneeId: 'ana', sprintId: null });
+    });
+
+    it('attaches an orphan card outside the backlog to the open sprint, keeping its validation', () => {
+      const orphan = ready({ status: 'TODO', validated: true, validatedById: 'ana' });
+
+      const plan = planMove(orphan, { status: 'DOING', assigneeId: 'beto', position: 'a0' }, context);
+
+      expect(plan.changes).toMatchObject({ sprintId: 'sprint1', validated: true, validatedById: 'ana' });
+      expect(failure(() => planMove(orphan, { status: 'TODO', assigneeId: 'beto', position: 'a5' }, noSprint))).toEqual(
+        noOpenSprint,
+      );
+    });
+
+    it('keeps a card already in the sprint where it is', () => {
+      const inSprint = ready({ status: 'TODO', sprintId: 'sprint1' });
+
+      expect(planMove(inSprint, { status: 'TODO', assigneeId: 'beto', position: 'a5' }, context).changes.sprintId).toBe(
+        'sprint1',
+      );
+    });
+  });
+
+  describe('validation gate (spec §7.2)', () => {
+    const notValidated = { status: 409, code: 'CARD_NOT_VALIDATED' };
+
+    it('refuses an unvalidated card entering DOING or DONE (409 CARD_NOT_VALIDATED)', () => {
+      const todo = ready({ status: 'TODO', sprintId: 'sprint1' });
+
+      for (const status of ['DOING', 'DONE'] as const) {
+        expect(failure(() => planMove(todo, { status, assigneeId: 'beto', position: 'a0' }, context))).toEqual(
+          notValidated,
+        );
+        // Straight from the backlog is never validated.
+        expect(failure(() => planMove(ready(), { status, assigneeId: 'beto', position: 'a0' }, context))).toEqual(
+          notValidated,
+        );
+      }
+    });
+
+    it('lets a validated card advance and come back to TODO keeping its validation', () => {
+      const todo = ready({ status: 'TODO', sprintId: 'sprint1', validated: true, validatedById: 'ana' });
+
+      const doing = planMove(todo, { status: 'DOING', assigneeId: 'beto', position: 'a0' }, context);
+      const done = planMove(todo, { status: 'DONE', assigneeId: 'beto', position: 'a0' }, context);
+      const toTodo = { status: 'TODO', assigneeId: 'beto', position: 'a0' } as const;
+      const back = planMove({ ...todo, status: 'DOING' }, toTodo, context);
+
+      expect(doing.changes).toMatchObject({ status: 'DOING', validated: true, validatedById: 'ana' });
+      expect(done.changes.status).toBe('DONE');
+      expect(back.changes).toMatchObject({ status: 'TODO', validated: true, validatedById: 'ana' });
+    });
+
+    it('does not block reordering an unvalidated card already in DOING', () => {
+      const doing = ready({ status: 'DOING', sprintId: 'sprint1' });
+
+      expect(planMove(doing, { status: 'DOING', assigneeId: 'beto', position: 'a5' }, context).changes.position).toBe(
+        'a5',
+      );
+    });
+
+    it('reports incomplete cards (400) before the sprint and validation rules (409)', () => {
+      const incomplete = card({ assigneeId: 'beto' });
+      const toDoing = { status: 'DOING', assigneeId: 'beto', position: 'a0' } as const;
+
+      expect(failure(() => planMove(incomplete, toDoing, noSprint))).toEqual({ status: 400, code: 'CARD_INCOMPLETE' });
+      expect(failure(() => planMove(ready(), toDoing, noSprint))).toEqual({ status: 409, code: 'NO_OPEN_SPRINT' });
+    });
   });
 });

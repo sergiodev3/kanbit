@@ -330,10 +330,14 @@ export function createCardsService({ repository, clock }: CardsServiceDeps): Car
         assertCanMoveCard(actor, team, card, target);
         if (isStale(card, expectedUpdatedAt)) throw cardConflict();
 
+        // Order: visibility (404) and permission (403), then the stale check (409 CARD_CONFLICT), then the move
+        // rules in `planMove` (400 request errors, then 409 NO_OPEN_SPRINT / CARD_NOT_VALIDATED).
         const now = clock.now();
+        const openSprint = await tx.findOpenSprint(card.teamId);
         const { changes, events } = planMove(card, target, {
           now,
           memberIds: team.members.map((member) => member.userId),
+          openSprintId: openSprint?.id ?? null,
         });
         const updated = await tx.updateCard(card.id, card.updatedAt, { ...changes, updatedAt: now });
         if (!updated) throw cardConflict();
