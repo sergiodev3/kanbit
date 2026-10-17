@@ -165,6 +165,68 @@ describe('BoardPage', () => {
     expect(screen.getByRole('rowheader', { name: 'Luis Alumno' })).toBeInTheDocument();
   });
 
+  it('offers a drag handle only on the cards the viewer may move', async () => {
+    mockBoard();
+
+    renderRoutes(studentRoutes, ['/team']);
+
+    await screen.findByText('Login con JWT');
+    const handles = screen.getAllByRole('button', { name: 'Arrastrar tarjeta' });
+    expect(handles.map((handle) => handle.closest('li')?.querySelector('[data-card-title]')?.textContent).sort()).toEqual(
+      ['Diseñar logo', 'Escribir README', 'Login con JWT', 'Pruebas de API'],
+    );
+    expect(handles[0]).toHaveAccessibleDescription(/Para tomar una tarjeta/);
+  });
+
+  it('picks a card up from the keyboard and cancels with Escape, announcing in Spanish', async () => {
+    const fetchMock = mockBoard();
+
+    renderRoutes(studentRoutes, ['/team']);
+
+    await screen.findByText('Login con JWT');
+    const handle = within(cell('Luis Alumno · Por hacer')).getByRole('button', { name: 'Arrastrar tarjeta' });
+    handle.focus();
+    fireEvent.keyDown(handle, { code: 'Space', key: ' ' });
+
+    await waitFor(() => expect(handle).toHaveAttribute('aria-pressed', 'true'));
+    fireEvent.keyDown(handle, { code: 'Escape', key: 'Escape' });
+
+    expect(await screen.findByText('Se canceló el movimiento de «Login con JWT».')).toBeInTheDocument();
+    expect(handle).not.toHaveAttribute('aria-pressed', 'true');
+    expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false);
+  });
+
+  it('offers a drag handle on every card to the moderator', async () => {
+    mockApi({
+      'GET /auth/me': () => jsonResponse(200, meFixture('STUDENT', { id: 'mod1', name: 'Ana López' })),
+      'GET /teams/t1/board': () => jsonResponse(200, boardFixture()),
+    });
+
+    renderRoutes(studentRoutes, ['/team']);
+
+    await screen.findByText('Login con JWT');
+    expect(screen.getAllByRole('button', { name: 'Arrastrar tarjeta' })).toHaveLength(6);
+  });
+
+  it('has no drag handles in the read-only teacher view', async () => {
+    mockBoard(boardFixture(), 'TEACHER');
+
+    renderRoutes(teacherRoutes, ['/board']);
+
+    await screen.findByText('Login con JWT');
+    expect(screen.queryByRole('button', { name: 'Arrastrar tarjeta' })).not.toBeInTheDocument();
+  });
+
+  it('has no drag handles while offline', async () => {
+    vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
+    mockBoard();
+
+    renderRoutes(studentRoutes, ['/team']);
+
+    await screen.findByText('Login con JWT');
+    expect(screen.queryByRole('button', { name: 'Arrastrar tarjeta' })).not.toBeInTheDocument();
+  });
+
   it('polls the board every 10 seconds', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     const fetchMock = mockBoard();

@@ -30,6 +30,7 @@ import {
   UNASSIGNED_ROW_ID,
   WEEKDAY_LABELS,
   type BoardRow,
+  type CardTarget,
   type Viewer,
 } from './board-model';
 
@@ -245,10 +246,12 @@ const isConflict = (error: unknown): boolean => isApiError(error, 'CARD_CONFLICT
 interface CardDialogProps {
   context: BoardContext;
   card: CardResponse;
+  /** Set when a drag needs more data before the move: "Mover a" comes first, prefilled with the drop target. */
+  moveTarget?: CardTarget;
   onClose: () => void;
 }
 
-export function CardDialog({ context, card, onClose }: CardDialogProps) {
+export function CardDialog({ context, card, moveTarget, onClose }: CardDialogProps) {
   const { board, viewer, online } = context;
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const deleteCard = useDeleteCard(board.team.id);
@@ -285,8 +288,17 @@ export function CardDialog({ context, card, onClose }: CardDialogProps) {
         {editable ? (
           <>
             <OfflineNotice online={online} />
-            <EditCardForm context={context} card={card} onDone={onClose} />
-            <MoveCardForm context={context} card={card} onDone={onClose} />
+            {moveTarget ? (
+              <>
+                <MoveCardForm context={context} card={card} initialTarget={moveTarget} onDone={onClose} />
+                <EditCardForm context={context} card={card} onDone={onClose} />
+              </>
+            ) : (
+              <>
+                <EditCardForm context={context} card={card} onDone={onClose} />
+                <MoveCardForm context={context} card={card} onDone={onClose} />
+              </>
+            )}
             {card.status === 'BACKLOG' && (
               <Section title="Eliminar">
                 <button
@@ -390,16 +402,26 @@ function EditCardForm({ context, card, onDone }: { context: BoardContext; card: 
 type MoveField = 'dueWeekday' | 'doneCriteria';
 const MOVE_FIELD_ORDER: readonly MoveField[] = ['dueWeekday', 'doneCriteria'];
 
+interface MoveCardFormProps {
+  context: BoardContext;
+  card: CardResponse;
+  /** The cell a drag dropped the card on; defaults to the card's own cell. */
+  initialTarget?: CardTarget;
+  onDone: () => void;
+}
+
 /**
  * "Mover a" (keyboard and phone move path): target column and row limited by the client permission mirror; the
  * card goes to the end of the target cell. Outside the Backlog it needs a day and a done criterion (spec §2.5).
  */
-function MoveCardForm({ context, card, onDone }: { context: BoardContext; card: CardResponse; onDone: () => void }) {
+function MoveCardForm({ context, card, initialTarget, onDone }: MoveCardFormProps) {
   const idPrefix = useId();
   const { board, rows, viewer, online } = context;
   const moveCard = useMoveCard(board.team.id);
-  const [status, setStatus] = useState<CardStatus>(card.status);
-  const [rowId, setRowId] = useState(card.assigneeId ?? UNASSIGNED_ROW_ID);
+  const [status, setStatus] = useState<CardStatus>(initialTarget?.status ?? card.status);
+  const [rowId, setRowId] = useState(
+    (initialTarget ? initialTarget.assigneeId : card.assigneeId) ?? UNASSIGNED_ROW_ID,
+  );
   const [dueWeekday, setDueWeekday] = useState<string>(card.dueWeekday ?? '');
   const [doneCriteria, setDoneCriteria] = useState(card.doneCriteria ?? '');
   const [errors, setErrors] = useState<FieldErrors<MoveField>>({});
@@ -459,6 +481,11 @@ function MoveCardForm({ context, card, onDone }: { context: BoardContext; card: 
     <Section title="Mover a">
       <form noValidate onSubmit={submit} aria-label="Mover a" className="space-y-3">
         <ErrorSummary messages={summary} />
+        {initialTarget && (
+          <p className="text-sm text-slate-700">
+            Para moverla a «{columnLabel(initialTarget.status)}», completa el día estimado y el criterio de terminado.
+          </p>
+        )}
         <fieldset disabled={!online} className="space-y-3">
           <SelectField
             id={`${idPrefix}-status`}
