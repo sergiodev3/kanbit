@@ -26,6 +26,12 @@ const MESSAGES: Record<string, string> = {
   CARD_INCOMPLETE: 'Para salir del Backlog la tarjeta necesita responsable, día estimado y criterio de terminado.',
   INVALID_POSITION: 'No se pudo calcular la posición de la tarjeta. Recarga el tablero e intenta de nuevo.',
   INVALID_PROJECT: 'El proyecto elegido no pertenece a este equipo.',
+  NO_OPEN_SPRINT: 'No hay un sprint abierto. El moderador debe iniciar el sprint de la semana.',
+  CARD_NOT_VALIDATED: 'La tarjeta debe estar validada por el moderador antes de pasar a En marcha o Terminado.',
+  CARD_NOT_IN_TODO: 'Solo se pueden validar tarjetas que están en Por hacer.',
+  SPRINT_ALREADY_OPEN: 'Ya hay un sprint abierto para este equipo.',
+  SPRINT_CLOSED: 'Este sprint ya se cerró.',
+  SPRINT_NOT_FOUND: 'No se encontró el sprint.',
 };
 
 const GENERIC_MESSAGE = 'Ocurrió un error inesperado. Intenta de nuevo.';

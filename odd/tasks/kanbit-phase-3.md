@@ -48,8 +48,8 @@ A Mon–Fri cycle simulated with the injectable `clock` passes the tests.
   `card-state`, Mon–Fri `phase3-flow` test (~650 forecast, ~700 actual) — route: delegated — api 209, shared 49;
   the writer stopped at a web fixture outside its surface (`today` missing); the parent added it inline, then
   typecheck/build/api tests green
-- [ ] T3 Web sprint controls: sprint.api, SprintHeader, start/close dialogs, Validar / Validar todas, messages (~800) —
-  route: delegated
+- [x] T3 Web sprint controls: sprint.api, SprintHeader, start/close dialogs, Validar / Validar todas, messages (~800
+  forecast, ~760 actual) — route: delegated — web 182 tests (writer + parent spot check); branch `feat/phase-3-web-sprint`
 - [ ] T4 Web states + gates: tile badges, "Mover a" and dnd gates, `applyMove` sprint/validation, README, deploy +
   production smoke (~550) — route: delegated. First to trim if time runs short (spec §12.1 cut order).
 
@@ -85,5 +85,15 @@ A Mon–Fri cycle simulated with the injectable `clock` passes the tests.
   `{validatedIds}`; `BoardResponse.today {date, weekday|null}`; shared `cardVisualState(card, sprint, today)` →
   `{pendingValidation, due: 'TODAY'|'OVERDUE'|null}`, `WEEKDAY_ORDER`.
 
+- T2 RDD: reliability lens approved (no findings), acknowledged. PR 1 #14 merged. A T1+T2 accumulated review (stop
+  hook, user granted) was refused before start (`invalid_request`, untracked T3 files; nothing created).
+- T3: slices RED→GREEN. Deviations accepted: header "Sprint N · lun 19 – vie 23 oct" with fixed Spanish abbreviations
+  (not Intl); singular/plural close copy; "Validar todas" runs without confirmation and announces the count; "Validar"
+  closes the card dialog on success (avoids a stale `updatedAt`); the Validación section renders first in the dialog;
+  counts only include cards of the open sprint. `useBoardMutation` exported for board writes.
+- T3 notes for T4: badges in `CardTile.tsx` via `cardVisualState(card, board.sprint, board.today)` from BoardPage's
+  `tile()`; "Mover a" gate in `MoveCardForm` (CardDialog); dnd gate in `board-dnd.ts` + BoardPage `onDecision`;
+  `applyMove` must set `sprintId`/`validated` like the server; `openSprintBoardFixture()` has validated and pending cards.
+
 ## Next step
-Commit T2, review, open PR 2, then T3.
+Commit T3, review, open PR 3 after PR 2 merges, then T4.

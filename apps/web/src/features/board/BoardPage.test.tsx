@@ -2,7 +2,7 @@ import type { BoardResponse } from '@kanbit/shared';
 import { act, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import type { RouteObject } from 'react-router';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { boardFixture } from '../../test/board-fixtures';
+import { boardFixture, MODERATOR_ID } from '../../test/board-fixtures';
 import { jsonResponse, meFixture, mockApi, renderRoutes, stubMatchMedia } from '../../test/utils';
 import { BoardPage } from './BoardPage';
 
@@ -92,6 +92,17 @@ describe('BoardPage', () => {
     expect(screen.queryByText('Diseñar logo')).not.toBeInTheDocument();
     fireEvent.click(toggle);
     expect(screen.getByText('Pantalla de tablero')).toBeInTheDocument();
+  });
+
+  it('offers the moderator the sprint controls in the header', async () => {
+    mockApi({
+      'GET /auth/me': () => jsonResponse(200, meFixture('STUDENT', { id: MODERATOR_ID })),
+      'GET /teams/t1/board': () => jsonResponse(200, boardFixture()),
+    });
+
+    renderRoutes(studentRoutes, ['/team']);
+
+    expect(await screen.findByRole('button', { name: 'Iniciar sprint de la semana' })).toBeEnabled();
   });
 
   it('offers "Nueva tarjeta" to members', async () => {

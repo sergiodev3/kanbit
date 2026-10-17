@@ -1,4 +1,4 @@
-import type { BoardResponse, CardResponse } from '@kanbit/shared';
+import type { BoardResponse, BoardSprint, CardResponse } from '@kanbit/shared';
 
 const STAMP = '2026-10-16T15:00:00.000Z';
 
@@ -76,4 +76,53 @@ export function boardFixture(overrides: Partial<BoardResponse> = {}): BoardRespo
     ],
     ...overrides,
   };
+}
+
+export const SPRINT_ID = 's1';
+
+/** An open sprint for the week of Mon Oct 19 – Fri Oct 23, 2026. */
+export function sprintFixture(overrides: Partial<BoardSprint> = {}): BoardSprint {
+  return {
+    id: SPRINT_ID,
+    number: 3,
+    startDate: '2026-10-19',
+    endDate: '2026-10-23',
+    goal: 'Terminar el login',
+    status: 'OPEN',
+    updatedAt: STAMP,
+    ...overrides,
+  };
+}
+
+/**
+ * The base board during an open sprint: every card outside the Backlog belongs to the sprint. `cmine` and
+ * `cother` wait for validation in Por hacer; `cmod` is validated and in En marcha; `cdone` is finished.
+ */
+export function openSprintBoardFixture(overrides: Partial<BoardResponse> = {}): BoardResponse {
+  const base = boardFixture();
+  const cards = base.cards.map((card) =>
+    card.status === 'BACKLOG'
+      ? card
+      : {
+          ...card,
+          sprintId: SPRINT_ID,
+          validated: card.status !== 'TODO',
+          validatedById: card.status === 'TODO' ? null : MODERATOR_ID,
+        },
+  );
+  cards.push(
+    cardFixture({
+      id: 'cdone',
+      title: 'Configurar CI',
+      status: 'DONE',
+      sprintId: SPRINT_ID,
+      assigneeId: OTHER_ID,
+      doneCriteria: 'Corre en cada push',
+      dueWeekday: 'MON',
+      validated: true,
+      validatedById: MODERATOR_ID,
+      completedAt: STAMP,
+    }),
+  );
+  return { ...base, today: { date: '2026-10-19', weekday: 'MON' }, sprint: sprintFixture(), cards, ...overrides };
 }

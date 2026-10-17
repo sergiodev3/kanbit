@@ -18,6 +18,7 @@ import { SelectField, type SelectOption } from '../../shared/forms/SelectField';
 import { TextField } from '../../shared/forms/TextField';
 import { dangerButton, primaryButton, secondaryButton } from '../../shared/ui/buttons';
 import { ConfirmDialog, Dialog } from '../../shared/ui/Dialog';
+import { useValidateCard } from '../sprint/sprint.api';
 import { useCreateCard, useDeleteCard, useMoveCard, useUpdateCard } from './board.api';
 import {
   BOARD_COLUMNS,
@@ -258,6 +259,8 @@ export function CardDialog({ context, card, moveTarget, onClose }: CardDialogPro
   const editable = viewer !== null && canEditCard(viewer, card);
   const projectName = board.projects.find((project) => project.id === card.projectId)?.name ?? '';
   const assigneeName = board.members.find((member) => member.userId === card.assigneeId)?.name ?? UNASSIGNED_LABEL;
+  const validation = validationLabel(card);
+  const canValidate = viewer?.isModerator === true && card.status === 'TODO' && !card.validated;
 
   if (confirmingDelete) {
     return (
@@ -285,6 +288,8 @@ export function CardDialog({ context, card, moveTarget, onClose }: CardDialogPro
         <p className="text-sm text-slate-600">
           {columnLabel(card.status)} · {assigneeName}
         </p>
+        {validation && <p className="text-sm font-semibold text-slate-800">{validation}</p>}
+        {canValidate && <ValidateCardSection context={context} card={card} onDone={onClose} />}
         {editable ? (
           <>
             <OfflineNotice online={online} />
@@ -322,6 +327,33 @@ export function CardDialog({ context, card, moveTarget, onClose }: CardDialogPro
         </button>
       </div>
     </Dialog>
+  );
+}
+
+/** Validation state outside the Backlog (spec §7.2): "Validada", or "Por validar" while waiting in Por hacer. */
+function validationLabel(card: CardResponse): string | null {
+  if (card.status === 'BACKLOG') return null;
+  if (card.validated) return 'Validada';
+  return card.status === 'TODO' ? 'Por validar' : null;
+}
+
+/** The moderator's "Validar" (spec §8.3); `expectedUpdatedAt` is the version on screen, refreshed by every reload. */
+function ValidateCardSection({ context, card, onDone }: { context: BoardContext; card: CardResponse; onDone: () => void }) {
+  const { board, online } = context;
+  const validateCard = useValidateCard(board.team.id);
+  return (
+    <Section title="Validación">
+      <ErrorSummary messages={validateCard.isError ? [errorMessage(validateCard.error)] : []} />
+      <p className="text-sm text-slate-700">Una tarjeta validada puede pasar a En marcha y a Terminado.</p>
+      <button
+        type="button"
+        disabled={!online || validateCard.isPending}
+        onClick={() => validateCard.mutate({ cardId: card.id, expectedUpdatedAt: card.updatedAt }, { onSuccess: onDone })}
+        className={primaryButton}
+      >
+        {validateCard.isPending ? 'Validando…' : 'Validar'}
+      </button>
+    </Section>
   );
 }
 
