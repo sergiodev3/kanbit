@@ -5,7 +5,7 @@ const teamSelect = {
   id: true,
   name: true,
   groupId: true,
-  group: { select: { teacherId: true } },
+  group: { select: { teacherId: true, timezone: true } },
   members: {
     orderBy: { rowOrder: 'asc' },
     select: { userId: true, isModerator: true, rowOrder: true, user: { select: { name: true, username: true } } },
@@ -42,6 +42,7 @@ function bind(db: Prisma.TransactionClient, root: PrismaClient | null): CardsRep
       return {
         ...rest,
         teacherId: group.teacherId,
+        timezone: group.timezone,
         members: members.map(({ user, ...member }) => ({ ...member, name: user.name, username: user.username })),
       };
     },

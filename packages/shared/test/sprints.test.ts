@@ -5,6 +5,7 @@ import {
   SprintGoal,
   SprintResponse,
   StartSprintRequest,
+  ValidateAllResponse,
 } from '../src/index';
 
 const sprint = {
@@ -49,5 +50,14 @@ describe('CloseSprintResponse', () => {
     const body = { sprint: { ...sprint, status: 'CLOSED' }, returnedCardIds: ['cz4a98xxat96iws9zmbrgj3c'] };
     expect(CloseSprintResponse.parse(body)).toEqual(body);
     expect(CloseSprintResponse.safeParse({ sprint }).success).toBe(false);
+  });
+});
+
+describe('ValidateAllResponse', () => {
+  it('lists the ids of the cards the moderator just validated', () => {
+    const body = { validatedIds: ['cz4a98xxat96iws9zmbrgj3c'] };
+    expect(ValidateAllResponse.parse(body)).toEqual(body);
+    expect(ValidateAllResponse.parse({ validatedIds: [] })).toEqual({ validatedIds: [] });
+    expect(ValidateAllResponse.safeParse({}).success).toBe(false);
   });
 });

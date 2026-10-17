@@ -108,13 +108,14 @@ describe('BoardResponse', () => {
     expect(CardResponse.safeParse({ ...card, status: 'LATER' }).success).toBe(false);
   });
 
-  it('describes the board: team, member rows, nullable sprint, projects and cards', () => {
+  it('describes the board: team, member rows, nullable sprint, projects, cards and today', () => {
     const board = {
       team: { id: 'team1', name: 'Los Bits', groupId: 'group1', moderatorId: 'user1' },
       members: [{ userId: 'user1', name: 'Ana', username: 'ana', isModerator: true, rowOrder: 0 }],
       sprint: null,
       projects: [{ id: projectId, teamId: 'team1', name: 'Kanbit', updatedAt: '2026-10-19T15:00:00.000Z' }],
       cards: [card],
+      today: { date: '2026-10-19', weekday: 'MON' },
     };
     expect(BoardResponse.parse(board)).toEqual(board);
 

@@ -398,7 +398,7 @@ export class MemoryDb {
     transaction: (fn) => fn(this.cardsRepository),
     findTeam: async (teamId) => {
       const team = this.teams.find((row) => row.id === teamId);
-      return team ? this.teamRecord(team) : null;
+      return team ? { ...this.teamRecord(team), timezone: this.timezoneOf(team.groupId) } : null;
     },
     findOpenSprint: async (teamId) => {
       const sprint = this.sprints.find((row) => row.teamId === teamId && row.status === 'OPEN');
@@ -455,7 +455,7 @@ export class MemoryDb {
     findTeam: async (teamId) => {
       const team = this.teams.find((row) => row.id === teamId);
       if (!team) return null;
-      return { ...this.teamRecord(team), timezone: this.groupTimezones.get(team.groupId) ?? DEFAULT_TIME_ZONE };
+      return { ...this.teamRecord(team), timezone: this.timezoneOf(team.groupId) };
     },
     findSprint: async (sprintId) => {
       const sprint = this.sprints.find((row) => row.id === sprintId);
@@ -503,6 +503,10 @@ export class MemoryDb {
     },
     addEvent: (event) => this.cardsRepository.addEvent(event),
   };
+
+  private timezoneOf(groupId: string): string {
+    return this.groupTimezones.get(groupId) ?? DEFAULT_TIME_ZONE;
+  }
 
   private lastPosition(teamId: string, assigneeId: string | null, status: CardStatus): string | null {
     const positions = this.cards

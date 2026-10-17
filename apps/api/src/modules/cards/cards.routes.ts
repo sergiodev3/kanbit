@@ -18,6 +18,8 @@ export function createCardsRouter({ service, requireAuth }: CardsRouterDeps): Ro
   router.patch('/cards/:id', requireAuth, controller.update);
   router.delete('/cards/:id', requireAuth, controller.remove);
   router.post('/cards/:id/move', requireAuth, controller.move);
+  router.post('/cards/:id/validate', requireAuth, controller.validate);
+  router.post('/teams/:id/cards/validate-all', requireAuth, controller.validateAll);
 
   return router;
 }

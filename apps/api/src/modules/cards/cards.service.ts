@@ -7,6 +7,8 @@ import {
   type SessionUser,
   type SprintStatus,
   type UpdateCardRequest,
+  type ValidateAllResponse,
+  type ValidateCardRequest,
   type Weekday,
   CardStatus as CardStatusEnum,
   comparePositions,
@@ -16,6 +18,7 @@ import {
   type TeamAccess,
   assertCanMoveCard,
   assertTeamMemberOrTeacher,
+  assertTeamModerator,
   canEditCard,
   cardNotFound,
   forbidden,
@@ -26,7 +29,7 @@ import type { Clock } from '../../lib/clock';
 import { isUniqueViolation } from '../../lib/prisma';
 import type { ProjectRecord } from '../projects/projects.service';
 import type { TeamMemberRecord } from '../teams/teams.service';
-import { type MoveChanges, cardIncomplete, planMove } from './card.rules';
+import { type MoveChanges, cardIncomplete, noOpenSprint, planMove } from './card.rules';
 
 export interface CardRecord {
   id: string;
@@ -52,6 +55,8 @@ export interface BoardTeamRecord extends TeamAccess {
   id: string;
   name: string;
   groupId: string;
+  /** The group's IANA time zone (spec §7.1). */
+  timezone: string;
   /** Ordered by `rowOrder`. */
   members: TeamMemberRecord[];
 }
@@ -92,7 +97,7 @@ export interface CardContent {
 export type CardChanges = CardContent & Partial<MoveChanges> & { updatedAt: Date };
 
 /** Types written to `CardEvent.type`. */
-export type CardEventType = 'CREATED' | 'EDITED' | 'MOVED' | 'ASSIGNED';
+export type CardEventType = 'CREATED' | 'EDITED' | 'MOVED' | 'ASSIGNED' | 'VALIDATED';
 
 export interface NewCardEvent {
   cardId: string;
@@ -140,6 +145,8 @@ export interface CardsService {
   update(actor: SessionUser, cardId: string, input: UpdateCardRequest): Promise<CardResponse>;
   remove(actor: SessionUser, cardId: string): Promise<void>;
   move(actor: SessionUser, cardId: string, input: MoveCardRequest): Promise<CardResponse>;
+  validate(actor: SessionUser, cardId: string, input: ValidateCardRequest): Promise<CardResponse>;
+  validateAll(actor: SessionUser, teamId: string): Promise<ValidateAllResponse>;
 }
 
 export interface CardsServiceDeps {
@@ -152,6 +159,7 @@ const iso = (date: Date) => date.toISOString();
 const idConflict = () => new AppError(409, 'ID_CONFLICT', 'A card with this id already exists');
 const invalidProject = () => new AppError(400, 'INVALID_PROJECT', 'The project does not belong to the team');
 const cardConflict = () => new AppError(409, 'CARD_CONFLICT', 'The card changed since it was loaded; reload and retry');
+const cardNotInTodo = () => new AppError(409, 'CARD_NOT_IN_TODO', 'Only cards in Por hacer can be validated');
 
 /** Optimistic concurrency (spec §5.3.1): a given `expectedUpdatedAt` must match the stored one exactly. */
 const isStale = (card: CardRecord, expectedUpdatedAt: string | undefined): boolean =>
@@ -211,6 +219,18 @@ export function createCardsService({ repository, clock }: CardsServiceDeps): Car
     return { card: toCardResponse(existing), created: false };
   }
 
+  /** Marks a TODO card as validated by `actor` (version-guarded) and records the VALIDATED event. */
+  async function validateCard(repo: CardsRepository, actor: SessionUser, card: CardRecord, now: Date) {
+    const updated = await repo.updateCard(card.id, card.updatedAt, {
+      validated: true,
+      validatedById: actor.id,
+      updatedAt: now,
+    });
+    if (!updated) throw cardConflict();
+    await repo.addEvent({ cardId: card.id, userId: actor.id, type: 'VALIDATED', fromStatus: null, toStatus: null });
+    return updated;
+  }
+
   return {
     async board(actor, teamId) {
       const team = await repository.findTeam(teamId);
@@ -237,6 +257,7 @@ export function createCardsService({ repository, clock }: CardsServiceDeps): Car
         sprint: sprint ? { ...sprint, updatedAt: iso(sprint.updatedAt) } : null,
         projects: projects.map((project) => ({ ...project, updatedAt: iso(project.updatedAt) })),
         cards: [...cards].sort(compareBoardCards).map(toCardResponse),
+        today: { date: clock.todayInZone(team.timezone), weekday: clock.weekdayInZone(team.timezone) },
       };
     },
 
@@ -343,6 +364,34 @@ export function createCardsService({ repository, clock }: CardsServiceDeps): Car
         if (!updated) throw cardConflict();
         for (const event of events) await tx.addEvent({ cardId: card.id, userId: actor.id, ...event });
         return toCardResponse(updated);
+      });
+    },
+
+    async validate(actor, cardId, { expectedUpdatedAt }) {
+      return repository.transaction(async (tx) => {
+        const card = await tx.findCard(cardId);
+        if (!card) throw cardNotFound();
+        // Spec §3: only the moderator validates (the teacher and plain members get 403).
+        assertTeamModerator(actor, await tx.findTeam(card.teamId), cardNotFound);
+        // Idempotent before the stale check, so a replayed validation (spec §5.3.1) is a no-op, not a conflict.
+        if (card.status === 'TODO' && card.validated) return toCardResponse(card);
+        if (isStale(card, expectedUpdatedAt)) throw cardConflict();
+        if (card.status !== 'TODO') throw cardNotInTodo();
+        return toCardResponse(await validateCard(tx, actor, card, clock.now()));
+      });
+    },
+
+    async validateAll(actor, teamId) {
+      return repository.transaction(async (tx) => {
+        assertTeamModerator(actor, await tx.findTeam(teamId));
+        const sprint = await tx.findOpenSprint(teamId);
+        if (!sprint) throw noOpenSprint();
+        const pending = (await tx.listBoardCards(teamId, sprint.id))
+          .filter((card) => card.sprintId === sprint.id && card.status === 'TODO' && !card.validated)
+          .sort(compareBoardCards);
+        const now = clock.now();
+        for (const card of pending) await validateCard(tx, actor, card, now);
+        return { validatedIds: pending.map((card) => card.id) };
       });
     },
   };
