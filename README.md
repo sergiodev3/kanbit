@@ -146,6 +146,34 @@ Backlog and Terminado cards never show a due state.
 
 Move errors gain `409 NO_OPEN_SPRINT` and `409 CARD_NOT_VALIDATED`, checked after the Phase 2 errors.
 
+## Phase 4: meetings (API)
+
+A meeting belongs to a sprint (and so to its team): one per sprint and day, of the type suggested by the weekday in the group's time zone (spec §7.4). The server decides the day with its clock, never the device.
+
+| Weekday | Suggested type |
+|---|---|
+| Monday | `KICKOFF` (Arranque) |
+| Tuesday to Thursday | `FOLLOWUP` (Seguimiento) |
+| Friday | `CLOSING` (Cierre) |
+
+**API endpoints** (prefix `/api/v1`):
+
+| Endpoint | Who |
+|---|---|
+| `GET /teams/:id/meetings/today` → `{ suggestedType, date, meeting }` (`suggestedType` and `meeting` are `null` without an open sprint or on a weekend) | team member or teacher |
+| `POST /teams/:id/meetings` → `201` meeting of the suggested type (`409 NO_OPEN_SPRINT`, `409 NO_MEETING_TODAY`, `409 MEETING_ALREADY_EXISTS`) | moderator or teacher |
+| `GET /meetings/:id` → meeting (`404 MEETING_NOT_FOUND`) | team member or teacher |
+| `PATCH /meetings/:id` `{ notesMd?, agreements?, expectedUpdatedAt? }` → meeting (`409 MEETING_CONFLICT`) | moderator or teacher |
+| `POST /meetings/:id/start` → meeting (already started → `200`, no change; `409 MEETING_ENDED`) | moderator or teacher |
+| `POST /meetings/:id/end` → meeting with `durationSeconds` (already ended → `200`, no change; `409 MEETING_NOT_STARTED`) | moderator or teacher |
+
+**Rules.**
+
+- Checks run in order: visibility (`404`), permission (`403`), then state and conflict errors (`409`). Meetings of other teams answer `404`, never their data.
+- Creating needs an open sprint, then a school day, then no meeting yet for the sprint and day; a concurrent create loses with `409 MEETING_ALREADY_EXISTS`. The creator is the facilitator when they are a team member (the teacher leaves it empty).
+- `startedAt` and `endedAt` come from the server clock; `durationSeconds` is the whole seconds between them. Repeating `start` or `end` is a no-op, so a retry keeps the first times.
+- Notes and agreements (up to 10000 characters each; blank text clears them) can be edited at any time, also after the meeting ended. `expectedUpdatedAt` guards against overwriting someone else's edit.
+
 ## Scripts
 
 Run from the repository root:
