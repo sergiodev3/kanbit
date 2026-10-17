@@ -64,6 +64,22 @@ describe('SprintHeader: open sprint', () => {
   });
 });
 
+describe('SprintHeader: deadline notice', () => {
+  it('reminds every viewer, teacher included, once the sprint is about to end', () => {
+    const board = openSprintBoardFixture({ today: { date: '2026-10-22', weekday: 'THU' } });
+
+    renderHeader(board, null);
+
+    expect(screen.getByRole('status')).toHaveTextContent(/^Quedan 2 días de sprint · \d+ tarjetas? sin terminar\.$/);
+  });
+
+  it('stays hidden early in the week', () => {
+    renderHeader(openSprintBoardFixture(), STUDENT_ID);
+
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+});
+
 describe('SprintHeader: moderator actions on the open sprint', () => {
   it('validates every pending card of the sprint at once', async () => {
     const fetchMock = mockApi({

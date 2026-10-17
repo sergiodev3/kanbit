@@ -27,6 +27,7 @@ describe('errorMessage', () => {
     ['CARD_NOT_VALIDATED', 'La tarjeta debe estar validada por el moderador antes de pasar a En marcha o Terminado.'],
     ['CARD_NOT_IN_TODO', 'Solo se pueden validar tarjetas que están en Por hacer.'],
     ['SPRINT_ALREADY_OPEN', 'Ya hay un sprint abierto para este equipo.'],
+    ['CARD_VALIDATED', 'Solo el moderador puede editar una tarjeta validada.'],
     ['SPRINT_CLOSED', 'Este sprint ya se cerró.'],
     ['SPRINT_NOT_FOUND', 'No se encontró el sprint.'],
   ])('localises the sprint error %s', (code, message) => {

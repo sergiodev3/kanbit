@@ -129,7 +129,8 @@ describe('CardDialog: edit and delete', () => {
     const dialog = await openCard('Login con JWT');
     const form = within(dialog).getByRole('form', { name: 'Editar tarjeta' });
     change(within(form).getByLabelText('Tarea'), 'Login con cookies');
-    fireEvent.click(within(form).getByRole('button', { name: 'Guardar cambios' }));
+    // The save button sits after "Mover a", outside the form, and submits it through its `form` attribute.
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Guardar cambios' }));
 
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     expect(requestBody(fetchMock, 'PATCH /cards/cmine')).toEqual({
@@ -415,5 +416,62 @@ describe('CardDialog: "Validar"', () => {
     const { dialog } = renderCard('cmine', { online: false });
 
     expect(within(dialog).getByRole('button', { name: 'Validar' })).toBeDisabled();
+  });
+});
+
+describe('CardDialog: validated card and save button', () => {
+  function renderCard(cardId: string, viewerId: string, board: BoardResponse = validatedMineBoard()) {
+    const card = board.cards.find((candidate) => candidate.id === cardId);
+    if (!card) throw new Error('fixture');
+    const context: BoardContext = { board, rows: buildRows(board), viewer: viewerOf(board, viewerId), online: true };
+    render(
+      <QueryClientProvider client={createQueryClient()}>
+        <CardDialog context={context} card={card} onClose={vi.fn()} />
+      </QueryClientProvider>,
+    );
+    return screen.getByRole('dialog', { name: card.title });
+  }
+
+  it("shows the assignee a validated card's content read-only, and says the moderator edits it", () => {
+    const dialog = renderCard('cmine', STUDENT_ID);
+
+    expect(within(dialog).queryByRole('form', { name: 'Editar tarjeta' })).not.toBeInTheDocument();
+    expect(within(dialog).getByText('Solo el moderador puede editar una tarjeta validada.')).toBeInTheDocument();
+    expect(within(dialog).getByText('El usuario inicia sesión')).toBeInTheDocument();
+    // The assignee keeps moving it.
+    expect(within(dialog).getByRole('form', { name: 'Mover a' })).toBeInTheDocument();
+  });
+
+  it('keeps the edit form for the moderator on a validated card', () => {
+    const dialog = renderCard('cmine', MODERATOR_ID);
+
+    expect(within(dialog).getByRole('form', { name: 'Editar tarjeta' })).toBeInTheDocument();
+    expect(within(dialog).queryByText('Solo el moderador puede editar una tarjeta validada.')).not.toBeInTheDocument();
+  });
+
+  it('keeps the edit form for the assignee until the card is validated', () => {
+    const dialog = renderCard('cmine', STUDENT_ID, openSprintBoardFixture());
+
+    expect(within(dialog).getByRole('form', { name: 'Editar tarjeta' })).toBeInTheDocument();
+  });
+
+  it('puts "Guardar cambios" after "Mover a" and before "Eliminar"', () => {
+    const dialog = renderCard('cmineb', STUDENT_ID, openSprintBoardFixture());
+    const save = within(dialog).getByRole('button', { name: 'Guardar cambios' });
+    const move = within(dialog).getByRole('form', { name: 'Mover a' });
+    const remove = within(dialog).getByRole('button', { name: 'Eliminar tarjeta' });
+
+    expect(move.compareDocumentPosition(save) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(save.compareDocumentPosition(remove) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('still saves from the relocated button', async () => {
+    const fetchMock = mockApi({ 'PATCH /cards/cmine': () => jsonResponse(200, cardFixture({ id: 'cmine' })) });
+    const dialog = renderCard('cmine', STUDENT_ID, openSprintBoardFixture());
+
+    change(within(dialog).getByLabelText('Tarea'), 'Login con cookies');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Guardar cambios' }));
+
+    await waitFor(() => expect(requestBody(fetchMock, 'PATCH /cards/cmine')).toMatchObject({ title: 'Login con cookies' }));
   });
 });
