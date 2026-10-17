@@ -52,6 +52,25 @@ describe('BoardPage', () => {
     }
   });
 
+  it('links a member to the day meeting', async () => {
+    mockBoard();
+
+    renderRoutes(studentRoutes, ['/team']);
+
+    expect(await screen.findByRole('link', { name: 'Reunión de hoy' })).toHaveAttribute('href', '/team/meeting');
+  });
+
+  it('links the teacher to the team meeting', async () => {
+    mockBoard(boardFixture(), 'TEACHER');
+
+    renderRoutes(teacherRoutes, ['/board']);
+
+    expect(await screen.findByRole('link', { name: 'Reunión de hoy' })).toHaveAttribute(
+      'href',
+      '/teacher/teams/t1/meeting',
+    );
+  });
+
   it('shows the card details on the tile', async () => {
     mockBoard();
 

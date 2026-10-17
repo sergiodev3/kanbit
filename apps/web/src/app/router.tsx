@@ -5,6 +5,8 @@ import { ProfilePage } from '../features/auth/ProfilePage';
 import { RegisterPage } from '../features/auth/RegisterPage';
 import { RequireAuth } from '../features/auth/RequireAuth';
 import { HealthPage } from '../features/health/HealthPage';
+import { TeacherMeetingPage } from '../features/meetings/TeacherMeetingPage';
+import { TeamMeetingPage } from '../features/meetings/TeamMeetingPage';
 import { GroupDetailPage } from '../features/teacher/GroupDetailPage';
 import { GroupsPage } from '../features/teacher/GroupsPage';
 import { TeacherBoardPage } from '../features/teacher/TeacherBoardPage';
@@ -35,11 +37,15 @@ export const routes: RouteObject[] = [
           { path: 'teacher', Component: GroupsPage },
           { path: 'teacher/groups/:groupId', Component: GroupDetailPage },
           { path: 'teacher/teams/:teamId/board', Component: TeacherBoardPage, handle: wide },
+          { path: 'teacher/teams/:teamId/meeting', Component: TeacherMeetingPage },
         ],
       },
       {
         element: <RequireAuth role="STUDENT" />,
-        children: [{ path: 'team', Component: TeamHomePage, handle: wide }],
+        children: [
+          { path: 'team', Component: TeamHomePage, handle: wide },
+          { path: 'team/meeting', Component: TeamMeetingPage },
+        ],
       },
       { path: '*', element: <Navigate to="/" replace /> },
     ],

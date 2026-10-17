@@ -2,6 +2,7 @@ import { onlineManager } from '@tanstack/react-query';
 import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { boardFixture } from '../test/board-fixtures';
+import { mockMeetingApi } from '../test/meeting-fixtures';
 import { jsonResponse, meFixture, mockApi, renderRoutes, unauthenticated } from '../test/utils';
 import { ME_QUERY_KEY } from '../features/auth/auth.api';
 import { clearPendingLogout, hasPendingLogout } from '../features/auth/pending-logout';
@@ -186,6 +187,43 @@ describe('app routes', () => {
     mockApi({ 'GET /auth/me': () => jsonResponse(200, meFixture('STUDENT')) });
 
     const { router } = renderRoutes(routes, ['/teacher/teams/t1/board']);
+
+    await waitFor(() => expect(router.state.location.pathname).toBe('/team'));
+  });
+
+  it('opens the day meeting for a student on their own team, with a way back to the board', async () => {
+    mockMeetingApi({ viewer: 'member' });
+
+    renderRoutes(routes, ['/team/meeting']);
+
+    expect(await screen.findByRole('heading', { level: 1, name: 'Reunión de hoy' })).toBeInTheDocument();
+    expect(await screen.findByRole('form', { name: 'Mi check-in' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '← Volver al tablero' })).toHaveAttribute('href', '/team');
+  });
+
+  it('tells a student without a team that there is no meeting yet', async () => {
+    mockApi({ 'GET /auth/me': () => jsonResponse(200, meFixture('STUDENT')) });
+
+    renderRoutes(routes, ['/team/meeting']);
+
+    expect(await screen.findByText('Tu docente todavía no te asigna a un equipo.')).toBeInTheDocument();
+  });
+
+  it('opens a team meeting for the teacher without a check-in form, with a way back to the board', async () => {
+    mockMeetingApi({ viewer: 'teacher' });
+
+    renderRoutes(routes, ['/teacher/teams/t1/meeting']);
+
+    expect(await screen.findByRole('heading', { level: 1, name: 'Reunión de hoy' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Check-ins del equipo' })).toBeInTheDocument();
+    expect(screen.queryByRole('form', { name: 'Mi check-in' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: '← Volver al tablero' })).toHaveAttribute('href', '/teacher/teams/t1/board');
+  });
+
+  it('keeps students out of the teacher meeting route', async () => {
+    mockApi({ 'GET /auth/me': () => jsonResponse(200, meFixture('STUDENT')) });
+
+    const { router } = renderRoutes(routes, ['/teacher/teams/t1/meeting']);
 
     await waitFor(() => expect(router.state.location.pathname).toBe('/team'));
   });

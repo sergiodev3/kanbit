@@ -1,8 +1,9 @@
 import { cardVisualState, type CardResponse } from '@kanbit/shared';
 import { useId, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { Link } from 'react-router';
 import { codeMessage, errorMessage } from '../../lib/error-messages';
 import { useOnlineStatus } from '../../shared/pwa/OfflineBanner';
-import { primaryButton } from '../../shared/ui/buttons';
+import { primaryButton, secondaryButton } from '../../shared/ui/buttons';
 import { useIsNarrow } from '../../shared/ui/useIsNarrow';
 import { useMe } from '../auth/auth.api';
 import { SprintHeader } from '../sprint/SprintHeader';
@@ -100,6 +101,9 @@ export function BoardPage({ teamId, readOnly = false }: BoardPageProps) {
           {readOnly && <Badge>Solo lectura</Badge>}
           {viewer?.isModerator && <Badge>Eres moderador del equipo</Badge>}
         </div>
+        <Link to={readOnly ? `/teacher/teams/${teamId}/meeting` : '/team/meeting'} className={secondaryButton}>
+          Reunión de hoy
+        </Link>
         <SprintHeader board={data} viewer={viewer} online={online} />
       </header>
 

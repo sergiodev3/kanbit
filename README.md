@@ -184,6 +184,21 @@ A meeting belongs to a sprint (and so to its team): one per sprint and day, of t
 - `expectedUpdatedAt` is checked only against an existing check-in: a mismatch answers `409 CHECKIN_CONFLICT` and writes nothing.
 - Checks run in order: visibility (`404 MEETING_NOT_FOUND`), permission (`403`), target (`400`), then conflicts (`409`). `GET /meetings/:id` lists the check-ins in the team's row order (members no longer on the team come last, by user id); `GET /teams/:id/meetings/today` still returns the meeting without them.
 
+## Phase 4: meetings (web)
+
+**Opening the meeting.** The board header has a "Reunión de hoy" button (students go to `/team/meeting`, the teacher to `/teacher/teams/:teamId/meeting`). The header shows the type the server suggests (Arranque on Monday, Seguimiento Tuesday to Thursday, Cierre on Friday) and the date; the web never reads the device clock. With no meeting possible it says why: no open sprint, or the weekend.
+
+1. **Create:** the moderator (or the teacher) presses "Crear reunión de hoy". Members see "Todavía no hay reunión de hoy" and the page picks the meeting up by itself when it exists.
+2. **Start and end:** "Iniciar reunión" and "Terminar reunión" (moderator or teacher). The page shows the state (Sin iniciar, En curso, Terminada) and, once ended, the saved duration ("12 min 05 s"). The timer and projection mode are not part of this page yet.
+3. **Check-in:** every member, moderator included, fills in "Mi check-in": ¿Qué hice?, ¿Qué estoy haciendo?, ¿Qué voy a hacer?, ¿Qué me bloquea?. It can be saved before the meeting starts and after it ends, and the form is prefilled with the saved check-in. Each save sends all four texts (the PUT replaces the whole check-in) with an id generated once per form, so retrying after a network failure is safe. If the check-in changed meanwhile (for example the moderator captured it), the page explains it and reloads the fresh texts.
+4. **Capture for a teammate:** the moderator picks a member in "Capturar check-in de un integrante" (also one with no check-in yet), edits the four texts and presses "Guardar captura"; only the changed texts are sent. The list then shows "Capturado por <nombre>".
+5. **Team check-ins:** a read-only list of every member's answers, "Sin check-in" for those who have none. The teacher reads it but cannot write check-ins.
+6. **Notes and agreements:** the moderator and the teacher edit "Notas" and "Acuerdos" and press "Guardar", also after the meeting ended; members read them. Both are plain text (no Markdown rendering). A save carries the `updatedAt` it started from and a concurrent edit answers `409 MEETING_CONFLICT`: the page explains it and loads the other version.
+
+**Freshness.** The meeting reloads every 10 seconds, on window focus and on reconnect (`GET /meetings/:id`), so check-ins sent from other phones show up without a refresh; while there is no meeting yet, the day's suggestion polls the same way. Typing is never overwritten by a poll.
+
+**Offline.** Creating, starting, ending, saving check-ins and notes need a connection: the controls are disabled with a notice. Queued offline check-ins are Phase 5.
+
 ## Scripts
 
 Run from the repository root:

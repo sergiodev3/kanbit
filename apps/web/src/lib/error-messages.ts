@@ -21,7 +21,7 @@ const MESSAGES: Record<string, string> = {
   MEMBERS_CONFLICT: 'Alguien más modificó el equipo. Recarga e intenta de nuevo.',
   CARD_NOT_FOUND: 'No se encontró la tarjeta. Es posible que la hayan eliminado.',
   CARD_CONFLICT: 'La tarjeta cambió mientras la editabas; se recargó el tablero. Revisa e intenta de nuevo.',
-  ID_CONFLICT: 'No se pudo crear la tarjeta. Cierra el formulario e intenta de nuevo.',
+  ID_CONFLICT: 'No se pudo guardar. Cierra el formulario e intenta de nuevo.',
   CARD_NOT_IN_BACKLOG: 'Solo se pueden eliminar tarjetas que están en el Backlog.',
   CARD_INCOMPLETE: 'Para salir del Backlog la tarjeta necesita responsable, día estimado y criterio de terminado.',
   INVALID_POSITION: 'No se pudo calcular la posición de la tarjeta. Recarga el tablero e intenta de nuevo.',
@@ -33,6 +33,13 @@ const MESSAGES: Record<string, string> = {
   SPRINT_ALREADY_OPEN: 'Ya hay un sprint abierto para este equipo.',
   SPRINT_CLOSED: 'Este sprint ya se cerró.',
   SPRINT_NOT_FOUND: 'No se encontró el sprint.',
+  MEETING_NOT_FOUND: 'No se encontró la reunión.',
+  MEETING_ALREADY_EXISTS: 'La reunión de hoy ya existe.',
+  NO_MEETING_TODAY: 'Hoy no hay reunión: las reuniones son de lunes a viernes.',
+  MEETING_ENDED: 'La reunión ya terminó.',
+  MEETING_NOT_STARTED: 'La reunión todavía no inicia.',
+  MEETING_CONFLICT: 'La reunión cambió mientras la editabas; se recargó. Revisa e intenta de nuevo.',
+  CHECKIN_CONFLICT: 'El check-in cambió mientras lo editabas; se recargó la reunión. Revisa e intenta de nuevo.',
 };
 
 const GENERIC_MESSAGE = 'Ocurrió un error inesperado. Intenta de nuevo.';

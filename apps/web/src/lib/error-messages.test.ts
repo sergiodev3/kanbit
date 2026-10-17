@@ -34,6 +34,20 @@ describe('errorMessage', () => {
     expect(errorMessage(new ApiError(409, code, code))).toBe(message);
   });
 
+  it.each([
+    ['MEETING_NOT_FOUND', 'No se encontró la reunión.'],
+    ['MEETING_ALREADY_EXISTS', 'La reunión de hoy ya existe.'],
+    ['NO_MEETING_TODAY', 'Hoy no hay reunión: las reuniones son de lunes a viernes.'],
+    ['MEETING_ENDED', 'La reunión ya terminó.'],
+    ['MEETING_NOT_STARTED', 'La reunión todavía no inicia.'],
+    ['MEETING_CONFLICT', 'La reunión cambió mientras la editabas; se recargó. Revisa e intenta de nuevo.'],
+    ['CHECKIN_CONFLICT', 'El check-in cambió mientras lo editabas; se recargó la reunión. Revisa e intenta de nuevo.'],
+    ['ID_CONFLICT', 'No se pudo guardar. Cierra el formulario e intenta de nuevo.'],
+    ['NOT_A_TEAM_MEMBER', 'El alumno no pertenece a este equipo.'],
+  ])('localises the meeting error %s', (code, message) => {
+    expect(errorMessage(new ApiError(409, code, code))).toBe(message);
+  });
+
   it('uses a generic message for unknown codes', () => {
     expect(errorMessage(new ApiError(418, 'TEAPOT', 'I am a teapot'))).toBe(
       'Ocurrió un error inesperado. Intenta de nuevo.',
