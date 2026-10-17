@@ -13,7 +13,7 @@ import type { AuthRepository, UserRecord } from '../../src/modules/auth/auth.ser
 import { releaseEvents } from '../../src/modules/cards/card.rules';
 import type { CardRecord, CardsRepository, NewCard } from '../../src/modules/cards/cards.service';
 import type { GroupRecord, GroupsRepository } from '../../src/modules/groups/groups.service';
-import type { MeetingRecord, MeetingsRepository } from '../../src/modules/meetings/meetings.service';
+import type { CheckinRecord, MeetingRecord, MeetingsRepository } from '../../src/modules/meetings/meetings.service';
 import type { ProjectsRepository } from '../../src/modules/projects/projects.service';
 import type { SprintsRepository, TeamSprintRecord } from '../../src/modules/sprints/sprints.service';
 import type { TeamRecord, TeamsRepository } from '../../src/modules/teams/teams.service';
@@ -100,6 +100,7 @@ export class MemoryDb {
   readonly cardEvents: CardEventRow[] = [];
   readonly sprints: SprintRow[] = [];
   readonly meetings: MeetingRow[] = [];
+  readonly checkins: CheckinRecord[] = [];
   /** `Group.timezone`; groups not listed use the schema default. */
   readonly groupTimezones = new Map<string, string>();
   /** Test hook: runs once right before the next card insert, as if a concurrent request inserted first. */
@@ -108,6 +109,8 @@ export class MemoryDb {
   raceNextSprintCreate: (() => void) | null = null;
   /** Test hook: runs once right before the next meeting insert, as if a concurrent create inserted first. */
   raceNextMeetingCreate: (() => void) | null = null;
+  /** Test hook: runs once right before the next check-in insert, as if a concurrent save inserted first. */
+  raceNextCheckinCreate: (() => void) | null = null;
   private seq = 0;
 
   constructor(private readonly now: () => Date = () => new Date('2026-10-19T15:00:00Z')) {}
@@ -239,6 +242,34 @@ export class MemoryDb {
     };
     this.meetings.push(meeting);
     return meeting;
+  }
+
+  /** Adds a check-in; mirrors @@unique([meetingId, userId]) like the Prisma adapter. */
+  addCheckin(data: {
+    meetingId: string;
+    userId: string;
+    id?: string;
+    capturedById?: string | null;
+    did?: string | null;
+    doing?: string | null;
+    willDo?: string | null;
+    blockers?: string | null;
+    present?: boolean;
+    updatedAt?: Date;
+  }): CheckinRecord {
+    const checkin: CheckinRecord = {
+      id: `checkin${++this.seq}`,
+      capturedById: null,
+      did: null,
+      doing: null,
+      willDo: null,
+      blockers: null,
+      present: true,
+      updatedAt: this.now(),
+      ...data,
+    };
+    this.checkins.push(checkin);
+    return checkin;
   }
 
   setGroupTimezone(groupId: string, timeZone: string): void {
@@ -575,6 +606,35 @@ export class MemoryDb {
       if (!meeting) return null;
       Object.assign(meeting, changes);
       return { ...meeting };
+    },
+    findCheckin: async (meetingId, userId) => {
+      const checkin = this.checkins.find((row) => row.meetingId === meetingId && row.userId === userId);
+      return checkin ? { ...checkin } : null;
+    },
+    findCheckinById: async (checkinId) => {
+      const checkin = this.checkins.find((row) => row.id === checkinId);
+      return checkin ? { ...checkin } : null;
+    },
+    listCheckins: async (meetingId) =>
+      this.checkins.filter((row) => row.meetingId === meetingId).map((row) => ({ ...row })),
+    createCheckin: async (data) => {
+      const race = this.raceNextCheckinCreate;
+      this.raceNextCheckinCreate = null;
+      race?.();
+      // Mirrors @@unique([meetingId, userId]) and the primary key.
+      const clash = this.checkins.some(
+        (row) => (row.meetingId === data.meetingId && row.userId === data.userId) || row.id === data.id,
+      );
+      if (clash) throw uniqueViolation();
+      return { ...this.addCheckin(data) };
+    },
+    updateCheckin: async (checkinId, version, changes) => {
+      const checkin = this.checkins.find(
+        (row) => row.id === checkinId && row.updatedAt.getTime() === version.getTime(),
+      );
+      if (!checkin) return null;
+      Object.assign(checkin, changes);
+      return { ...checkin };
     },
   };
 

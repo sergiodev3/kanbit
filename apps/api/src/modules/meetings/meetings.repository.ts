@@ -1,5 +1,5 @@
 import type { Prisma, PrismaClient } from '../../generated/prisma/client';
-import type { MeetingRecord, MeetingsRepository } from './meetings.service';
+import type { CheckinRecord, MeetingRecord, MeetingsRepository } from './meetings.service';
 
 const meetingSelect = {
   id: true,
@@ -15,6 +15,19 @@ const meetingSelect = {
   updatedAt: true,
   sprint: { select: { teamId: true } },
 } satisfies Prisma.MeetingSelect;
+
+const checkinSelect = {
+  id: true,
+  meetingId: true,
+  userId: true,
+  capturedById: true,
+  did: true,
+  doing: true,
+  willDo: true,
+  blockers: true,
+  present: true,
+  updatedAt: true,
+} satisfies Prisma.MeetingCheckinSelect;
 
 type MeetingRow = Prisma.MeetingGetPayload<{ select: typeof meetingSelect }>;
 
@@ -39,7 +52,10 @@ function bind(db: Prisma.TransactionClient, root: PrismaClient | null): Meetings
         select: {
           id: true,
           group: { select: { teacherId: true, timezone: true } },
-          members: { select: { userId: true, isModerator: true } },
+          members: {
+            select: { userId: true, isModerator: true, rowOrder: true },
+            orderBy: { rowOrder: 'asc' },
+          },
         },
       });
       if (!team) return null;
@@ -76,6 +92,24 @@ function bind(db: Prisma.TransactionClient, root: PrismaClient | null): Meetings
       const { count } = await db.meeting.updateMany({ where: { id: meetingId, updatedAt: version }, data: changes });
       if (count === 0) return null;
       return repository.findMeeting(meetingId);
+    },
+
+    findCheckin: (meetingId, userId) =>
+      db.meetingCheckin.findUnique({ where: { meetingId_userId: { meetingId, userId } }, select: checkinSelect }),
+
+    findCheckinById: (checkinId) => db.meetingCheckin.findUnique({ where: { id: checkinId }, select: checkinSelect }),
+
+    listCheckins: (meetingId) => db.meetingCheckin.findMany({ where: { meetingId }, select: checkinSelect }),
+
+    createCheckin: (data) => db.meetingCheckin.create({ data, select: checkinSelect }),
+
+    async updateCheckin(checkinId, version, changes) {
+      const { count } = await db.meetingCheckin.updateMany({
+        where: { id: checkinId, updatedAt: version },
+        data: changes,
+      });
+      if (count === 0) return null;
+      return repository.findCheckinById(checkinId);
     },
   };
   return repository;
