@@ -4,6 +4,7 @@ import { createClock } from '../../src/lib/clock';
 import { createAuthService } from '../../src/modules/auth/auth.service';
 import { createCardsService } from '../../src/modules/cards/cards.service';
 import { createGroupsService } from '../../src/modules/groups/groups.service';
+import { createMeetingsService } from '../../src/modules/meetings/meetings.service';
 import { createProjectsService } from '../../src/modules/projects/projects.service';
 import { createSprintsService } from '../../src/modules/sprints/sprints.service';
 import { createTeamsService } from '../../src/modules/teams/teams.service';
@@ -42,6 +43,7 @@ export function buildTestApp(options: TestAppOptions = {}) {
       projects: createProjectsService({ repository: db.projectsRepository }),
       cards: createCardsService({ repository: db.cardsRepository, clock }),
       sprints: createSprintsService({ repository: db.sprintsRepository, clock }),
+      meetings: createMeetingsService({ repository: db.meetingsRepository, clock }),
     },
   });
 

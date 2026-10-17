@@ -1,6 +1,7 @@
 import {
   type CardStatus,
   type Membership,
+  type MeetingType,
   type Role,
   type SprintStatus,
   type Weekday,
@@ -12,6 +13,7 @@ import type { AuthRepository, UserRecord } from '../../src/modules/auth/auth.ser
 import { releaseEvents } from '../../src/modules/cards/card.rules';
 import type { CardRecord, CardsRepository, NewCard } from '../../src/modules/cards/cards.service';
 import type { GroupRecord, GroupsRepository } from '../../src/modules/groups/groups.service';
+import type { MeetingRecord, MeetingsRepository } from '../../src/modules/meetings/meetings.service';
 import type { ProjectsRepository } from '../../src/modules/projects/projects.service';
 import type { SprintsRepository, TeamSprintRecord } from '../../src/modules/sprints/sprints.service';
 import type { TeamRecord, TeamsRepository } from '../../src/modules/teams/teams.service';
@@ -51,6 +53,8 @@ interface ProjectRow {
 type CardRow = CardRecord;
 
 type SprintRow = TeamSprintRecord;
+
+type MeetingRow = MeetingRecord;
 
 interface CardEventRow {
   id: string;
@@ -95,12 +99,15 @@ export class MemoryDb {
   readonly cards: CardRow[] = [];
   readonly cardEvents: CardEventRow[] = [];
   readonly sprints: SprintRow[] = [];
+  readonly meetings: MeetingRow[] = [];
   /** `Group.timezone`; groups not listed use the schema default. */
   readonly groupTimezones = new Map<string, string>();
   /** Test hook: runs once right before the next card insert, as if a concurrent request inserted first. */
   raceNextCardCreate: ((card: NewCard) => void) | null = null;
   /** Test hook: runs once right before the next sprint insert, as if a concurrent start inserted first. */
   raceNextSprintCreate: (() => void) | null = null;
+  /** Test hook: runs once right before the next meeting insert, as if a concurrent create inserted first. */
+  raceNextMeetingCreate: (() => void) | null = null;
   private seq = 0;
 
   constructor(private readonly now: () => Date = () => new Date('2026-10-19T15:00:00Z')) {}
@@ -202,6 +209,36 @@ export class MemoryDb {
     };
     this.sprints.push(sprint);
     return sprint;
+  }
+
+  /** Adds a meeting to a sprint; `teamId` is derived from the sprint like the Prisma adapter does. */
+  addMeeting(data: {
+    sprintId: string;
+    date: string;
+    type?: MeetingType;
+    startedAt?: Date | null;
+    endedAt?: Date | null;
+    durationSeconds?: number | null;
+    notesMd?: string | null;
+    agreements?: string | null;
+    facilitatorId?: string | null;
+  }): MeetingRow {
+    const sprint = this.mustFind(this.sprints, data.sprintId);
+    const meeting: MeetingRow = {
+      id: `meeting${++this.seq}`,
+      teamId: sprint.teamId,
+      type: 'FOLLOWUP',
+      startedAt: null,
+      endedAt: null,
+      durationSeconds: null,
+      notesMd: null,
+      agreements: null,
+      facilitatorId: null,
+      updatedAt: this.now(),
+      ...data,
+    };
+    this.meetings.push(meeting);
+    return meeting;
   }
 
   setGroupTimezone(groupId: string, timeZone: string): void {
@@ -502,6 +539,43 @@ export class MemoryDb {
       return true;
     },
     addEvent: (event) => this.cardsRepository.addEvent(event),
+  };
+
+  readonly meetingsRepository: MeetingsRepository = {
+    transaction: (fn) => fn(this.meetingsRepository),
+    findTeam: async (teamId) => {
+      const team = this.teams.find((row) => row.id === teamId);
+      if (!team) return null;
+      return { ...this.teamRecord(team), timezone: this.timezoneOf(team.groupId) };
+    },
+    findOpenSprintId: async (teamId) =>
+      this.sprints.find((row) => row.teamId === teamId && row.status === 'OPEN')?.id ?? null,
+    findMeeting: async (meetingId) => {
+      const meeting = this.meetings.find((row) => row.id === meetingId);
+      return meeting ? { ...meeting } : null;
+    },
+    findMeetingOnDate: async (sprintId, date) => {
+      const meeting = this.meetings.find((row) => row.sprintId === sprintId && row.date === date);
+      return meeting ? { ...meeting } : null;
+    },
+    createMeeting: async (data) => {
+      const race = this.raceNextMeetingCreate;
+      this.raceNextMeetingCreate = null;
+      race?.();
+      // Mirrors @@unique([sprintId, date]).
+      if (this.meetings.some((row) => row.sprintId === data.sprintId && row.date === data.date)) {
+        throw uniqueViolation();
+      }
+      return { ...this.addMeeting(data) };
+    },
+    updateMeeting: async (meetingId, version, changes) => {
+      const meeting = this.meetings.find(
+        (row) => row.id === meetingId && row.updatedAt.getTime() === version.getTime(),
+      );
+      if (!meeting) return null;
+      Object.assign(meeting, changes);
+      return { ...meeting };
+    },
   };
 
   private timezoneOf(groupId: string): string {
