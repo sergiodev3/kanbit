@@ -1,5 +1,7 @@
+import { Link } from 'react-router';
 import { errorMessage } from '../../lib/error-messages';
 import { useOnlineStatus } from '../../shared/pwa/OfflineBanner';
+import { secondaryButton } from '../../shared/ui/buttons';
 import { useMe } from '../auth/auth.api';
 import { useBoard } from '../board/board.api';
 import { viewerOf } from '../board/board-model';
@@ -9,7 +11,7 @@ import { CheckinList } from './CheckinList';
 import { MeetingControls } from './MeetingControls';
 import { MeetingNotes } from './MeetingNotes';
 import { useMeetingDetail, useTodayMeeting } from './meetings.api';
-import { checkinRows, formatMeetingDate, meetingTypeLabel, noMeetingReason } from './meetings-model';
+import { checkinRows, formatMeetingDate, meetingTypeLabel, noMeetingReason, projectionPath } from './meetings-model';
 
 export interface MeetingPageProps {
   teamId: string;
@@ -63,6 +65,10 @@ export function MeetingPage({ teamId }: MeetingPageProps) {
           Sin conexión: no puedes guardar cambios de la reunión.
         </p>
       )}
+
+      <Link to={projectionPath(teamId, isTeacher)} className={secondaryButton}>
+        Proyectar
+      </Link>
 
       <MeetingControls
         teamId={teamId}

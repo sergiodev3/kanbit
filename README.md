@@ -189,7 +189,7 @@ A meeting belongs to a sprint (and so to its team): one per sprint and day, of t
 **Opening the meeting.** The board header has a "Reunión de hoy" button (students go to `/team/meeting`, the teacher to `/teacher/teams/:teamId/meeting`). The header shows the type the server suggests (Arranque on Monday, Seguimiento Tuesday to Thursday, Cierre on Friday) and the date; the web never reads the device clock. With no meeting possible it says why: no open sprint, or the weekend.
 
 1. **Create:** the moderator (or the teacher) presses "Crear reunión de hoy". Members see "Todavía no hay reunión de hoy" and the page picks the meeting up by itself when it exists.
-2. **Start and end:** "Iniciar reunión" and "Terminar reunión" (moderator or teacher). The page shows the state (Sin iniciar, En curso, Terminada) and, once ended, the saved duration ("12 min 05 s"). The timer and projection mode are not part of this page yet.
+2. **Start and end:** "Iniciar reunión" and "Terminar reunión" (moderator or teacher). The page shows the state (Sin iniciar, En curso, Terminada) and, once ended, the saved duration ("12 min 05 s"). The 15-minute timer lives in the projection mode (below).
 3. **Check-in:** every member, moderator included, fills in "Mi check-in": ¿Qué hice?, ¿Qué estoy haciendo?, ¿Qué voy a hacer?, ¿Qué me bloquea?. It can be saved before the meeting starts and after it ends, and the form is prefilled with the saved check-in. Each save sends all four texts (the PUT replaces the whole check-in) with an id generated once per form, so retrying after a network failure is safe. If the check-in changed meanwhile (for example the moderator captured it), the page explains it and reloads the fresh texts.
 4. **Capture for a teammate:** the moderator picks a member in "Capturar check-in de un integrante" (also one with no check-in yet), edits the four texts and presses "Guardar captura"; only the changed texts are sent. The list then shows "Capturado por <nombre>".
 5. **Team check-ins:** a read-only list of every member's answers, "Sin check-in" for those who have none. The teacher reads it but cannot write check-ins.
@@ -198,6 +198,22 @@ A meeting belongs to a sprint (and so to its team): one per sprint and day, of t
 **Freshness.** The meeting reloads every 10 seconds, on window focus and on reconnect (`GET /meetings/:id`), so check-ins sent from other phones show up without a refresh; while there is no meeting yet, the day's suggestion polls the same way. Typing is never overwritten by a poll.
 
 **Offline.** Creating, starting, ending, saving check-ins and notes need a connection: the controls are disabled with a notice. Queued offline check-ins are Phase 5.
+
+### Phase 4: projection mode
+
+**Opening it.** The meeting page has a "Proyectar" button (students go to `/team/meeting/projection`, the teacher to `/teacher/teams/:teamId/meeting/projection`). It is a full-screen, dark, high-contrast layer over the app chrome; "Salir de proyección" goes back to the meeting page. With no meeting yet it explains why and links to the meeting page, where it is created (the projection never creates one).
+
+**What it shows.** The team name, meeting type and date; the giant countdown; every member's check-in in large type ("Sin check-in" for those without one); and a compact read-only board (a row per member, the four columns, titles truncated, at most three per cell plus "+N más"). Check-ins and the board reload by polling (10 s), so a check-in sent from a phone shows up within one poll without a refresh.
+
+**Controls (moderator and teacher only).** "Iniciar" starts the meeting on the server (if it has not started) and the local countdown; "Pausar" / "Reanudar" and "Reiniciar" only affect the local countdown; "Terminar reunión" ends the meeting on the server and freezes the screen on "Tiempo" with the saved duration. Members who open the projection see everything read-only. The saved start, end and duration are the server's; the countdown is a display aid.
+
+**Color phases.** Green until minute 10 ("En tiempo"), yellow from minute 10 ("Últimos 5 minutos"), red from minute 14 ("Último minuto"), and at 00:00 "Tiempo" blinks. Color is never the only signal: every phase also has its text label. The blink is replaced by a still "Tiempo" when the device asks for reduced motion (`prefers-reduced-motion`).
+
+**Wake Lock.** While the projection is open it requests a screen wake lock so the projector does not sleep, and asks again when the tab becomes visible. Where the Screen Wake Lock API is missing or refused, nothing happens (the screen may sleep).
+
+**Reload limitation.** After a page reload mid-meeting (started, not ended), the countdown resumes from the time elapsed since the server's `startedAt`, measured with the device clock. That is for the display only: a skewed device clock shows a skewed timer, and a pause or reset made before the reload is not remembered. The same resume happens for a member who opens the projection late, or whose screen sees the meeting start while polling.
+
+**Not in v1.0.** Turn-taking (per-member mini timer, "Siguiente", seconds spoken), the quick team selector and random order.
 
 ## Scripts
 

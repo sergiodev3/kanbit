@@ -7,10 +7,24 @@ import {
   checkinTextsOf,
   formatDuration,
   formatMeetingDate,
+  meetingPath,
   meetingTypeLabel,
   noMeetingReason,
   NO_MEETING_MESSAGES,
+  projectionPath,
 } from './meetings-model';
+
+describe('meeting and projection paths', () => {
+  it('sends a student to the own-team routes', () => {
+    expect(meetingPath('t1', false)).toBe('/team/meeting');
+    expect(projectionPath('t1', false)).toBe('/team/meeting/projection');
+  });
+
+  it('sends the teacher to the routes of the team', () => {
+    expect(meetingPath('t1', true)).toBe('/teacher/teams/t1/meeting');
+    expect(projectionPath('t1', true)).toBe('/teacher/teams/t1/meeting/projection');
+  });
+});
 
 describe('meetingTypeLabel', () => {
   it.each([

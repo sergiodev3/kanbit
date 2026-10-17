@@ -10,7 +10,14 @@ export const MEETING_TYPE_LABELS: Record<MeetingType, string> = {
 
 export const meetingTypeLabel = (type: MeetingType): string => MEETING_TYPE_LABELS[type];
 
-const WEEKDAYS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'] as const;
+/** The meeting page of the viewer: the teacher reaches any team, a student their own. */
+export const meetingPath = (teamId: string, isTeacher: boolean): string =>
+  isTeacher ? `/teacher/teams/${teamId}/meeting` : '/team/meeting';
+
+export const projectionPath = (teamId: string, isTeacher: boolean): string =>
+  `${meetingPath(teamId, isTeacher)}/projection`;
+
+const WEEKDAYS =['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'] as const;
 const MONTHS = [
   'enero',
   'febrero',
