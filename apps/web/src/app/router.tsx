@@ -5,7 +5,8 @@ import { ProfilePage } from '../features/auth/ProfilePage';
 import { RegisterPage } from '../features/auth/RegisterPage';
 import { RequireAuth } from '../features/auth/RequireAuth';
 import { HealthPage } from '../features/health/HealthPage';
-import { TeacherHomePage } from '../features/teacher/TeacherHomePage';
+import { GroupDetailPage } from '../features/teacher/GroupDetailPage';
+import { GroupsPage } from '../features/teacher/GroupsPage';
 import { TeamHomePage } from '../features/team/TeamHomePage';
 import { RootLayout } from './RootLayout';
 
@@ -26,7 +27,10 @@ export const routes: RouteObject[] = [
       },
       {
         element: <RequireAuth role="TEACHER" />,
-        children: [{ path: 'teacher', Component: TeacherHomePage }],
+        children: [
+          { path: 'teacher', Component: GroupsPage },
+          { path: 'teacher/groups/:groupId', Component: GroupDetailPage },
+        ],
       },
       {
         element: <RequireAuth role="STUDENT" />,
