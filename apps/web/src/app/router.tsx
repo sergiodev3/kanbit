@@ -5,6 +5,7 @@ import { ProfilePage } from '../features/auth/ProfilePage';
 import { RegisterPage } from '../features/auth/RegisterPage';
 import { RequireAuth } from '../features/auth/RequireAuth';
 import { HealthPage } from '../features/health/HealthPage';
+import { HelpPage } from '../features/help/HelpPage';
 import { TeacherProjectionPage, TeamProjectionPage } from '../features/meetings/ProjectionRoutePages';
 import { TeacherMeetingPage } from '../features/meetings/TeacherMeetingPage';
 import { TeamMeetingPage } from '../features/meetings/TeamMeetingPage';
@@ -25,6 +26,7 @@ export const routes: RouteObject[] = [
       { path: 'login', Component: LoginPage },
       { path: 'register', Component: RegisterPage },
       { path: 'status', Component: HealthPage },
+      { path: 'ayuda', Component: HelpPage },
       {
         element: <RequireAuth />,
         children: [

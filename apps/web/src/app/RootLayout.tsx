@@ -41,6 +41,12 @@ export function RootLayout() {
         </Link>
         <div className="flex min-w-0 items-center gap-2">
           <InstallButton />
+          <NavLink
+            to="/ayuda"
+            className={({ isActive }) => `${headerButton} ${isActive ? 'bg-brand-700' : 'hover:bg-brand-700'}`}
+          >
+            Ayuda
+          </NavLink>
           {me.data && (
             <>
               <span className="max-w-32 truncate text-sm sm:max-w-48">{me.data.user.name}</span>

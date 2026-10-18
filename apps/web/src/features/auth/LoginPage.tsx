@@ -88,6 +88,12 @@ export function LoginPage() {
           Crea tu cuenta
         </Link>
       </p>
+      <p className="text-center text-sm text-slate-700">
+        ¿Primera vez en Kanbit?{' '}
+        <Link to="/ayuda" className={linkClasses}>
+          Lee la guía de uso
+        </Link>
+      </p>
     </section>
   );
 }
