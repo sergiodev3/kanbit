@@ -25,6 +25,14 @@ afterEach(() => {
 });
 
 describe('LoginPage', () => {
+  it('links to the usage guide', async () => {
+    mockApi({ 'GET /auth/me': unauthenticated });
+
+    renderRoutes(routes, ['/login']);
+
+    expect(await screen.findByRole('link', { name: 'Lee la guía de uso' })).toHaveAttribute('href', '/ayuda');
+  });
+
   it.each([
     ['TEACHER', 'Teacher home'],
     ['STUDENT', 'Team home'],

@@ -215,6 +215,10 @@ A meeting belongs to a sprint (and so to its team): one per sprint and day, of t
 
 **Not in v1.0.** Turn-taking (per-member mini timer, "Siguiente", seconds spoken), the quick team selector and random order.
 
+## Help page
+
+`/ayuda` is a public page (no session needed) with the student guide: first login, the board, creating and moving cards, moderator validation, the sprint week and the daily check-in. Share `https://kanbit.app` and point students to the "Ayuda" link in the header or on the login screen. The check-in questions are read from `CHECKIN_QUESTIONS`, so the guide stays in sync with the form. It is static copy in `apps/web/src/features/help/HelpPage.tsx`; no API involved.
+
 ## Scripts
 
 Run from the repository root:
